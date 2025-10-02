@@ -1,5 +1,5 @@
-from etl import run_etl
-from features import get_mall_vector, get_business_vector
+from .datastore.etl import run_etl
+from .service.features import get_mall_vector, get_business_vector
 from sklearn.metrics.pairwise import cosine_similarity
 
 def compute_match(mall, biz):

@@ -1,6 +1,6 @@
 import pandas as pd
-from db import SessionLocal
-from models import Mall, Business
+from ..config.db import SessionLocal
+from ..model.models import Mall, Business
 
 def extract_mall_data():
     with SessionLocal() as session:
