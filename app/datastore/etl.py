@@ -1,27 +1,57 @@
 import pandas as pd
 from ..config.db import SessionLocal
 from ..model.models import Mall, Business
+from ..exception import DemographicDataError, BusinessDataError
+from .cache_manager import (
+    cache_mall_demographic, 
+    get_cached_mall_demographic,
+    cache_business_data,
+    get_cached_business_data,
+    clear_data_cache, 
+    get_cache_status
+)
 
 def extract_mall_data():
+    print("✓ Fetching mall data from database")
     with SessionLocal() as session:
         malls = session.query(Mall).all()
-        data = [
-            {
+        data = []
+        
+        for m in malls:
+            mall_id = str(m.id)
+            
+            cached_demographic = get_cached_mall_demographic(mall_id)
+            
+            if not cached_demographic:
+                raise DemographicDataError(mall_id, "mall")
+            
+            demographic = cached_demographic
+            
+            data.append({
                 "mall_id": m.id,
                 "name": m.name,
                 "type": m.type,
                 "avg_daily_visitors": m.avg_daily_visitors,
-                "demographic": m.demographic,
-            }
-            for m in malls
-        ]
+                "demographic": demographic,
+            })
+        
         return pd.DataFrame(data)
 
 def extract_business_data():
+    print("✓ Fetching business data from database")
     with SessionLocal() as session:
         businesses = session.query(Business).all()
-        data = [
-            {
+        data = []
+        
+        for b in businesses:
+            business_id = str(b.id)
+            
+            cached_business_data = get_cached_business_data(business_id)
+            
+            if not cached_business_data:
+                raise BusinessDataError(business_id)
+            
+            data.append({
                 "business_id": b.id,
                 "name": b.name,
                 "category": b.category,
@@ -29,10 +59,9 @@ def extract_business_data():
                 "budget": b.budget,
                 "required_size": b.required_size,
                 "visitor_capacity": b.visitor_capacity,
-                "target_demographic": b.target_demographic,
-            }
-            for b in businesses
-        ]
+                "target_demographic": cached_business_data,
+            })
+        
         return pd.DataFrame(data)
 
 def transform_mall(data: pd.DataFrame):
@@ -45,7 +74,20 @@ def transform_business(data: pd.DataFrame):
 def load(data: pd.DataFrame):
     return data.to_dict(orient="records")
 
-def run_etl():
+def run_etl(use_cache: bool = True):
+    """
+    Run ETL pipeline with optional caching
+    Args:
+        use_cache: Whether to use cached data if available
+    """
+    if not use_cache:
+        print("✓ Running ETL without cache")
+        clear_data_cache()
+    
+    # Show cache status
+    cache_status = get_cache_status()
+    print(f"Cache status: {cache_status}")
+    
     malls_raw = extract_mall_data()
     businesses_raw = extract_business_data()
     malls = transform_mall(malls_raw)
