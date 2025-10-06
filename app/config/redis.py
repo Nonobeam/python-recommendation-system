@@ -3,19 +3,19 @@ from dotenv import load_dotenv
 import os
 import json
 from typing import Optional, Any
+from pathlib import Path
 from ..exception import RedisConnectionError, RedisOperationError
 
-# Load environment variables
-load_dotenv()
+root_path = Path(__file__).parent.parent.parent
+env_path = root_path / ".env"
+load_dotenv(dotenv_path=env_path)
 
-# Redis configuration
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 REDIS_DB = int(os.getenv("REDIS_DB", 0))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
 REDIS_DECODE_RESPONSES = True
 
-# Redis connection pool
 redis_pool = redis.ConnectionPool(
     host=REDIS_HOST,
     port=REDIS_PORT,
@@ -25,7 +25,8 @@ redis_pool = redis.ConnectionPool(
     max_connections=20
 )
 
-# Redis client
+print(f"Connecting to Redis at redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
+
 redis_client = redis.Redis(connection_pool=redis_pool)
 
 class RedisCache:
@@ -75,12 +76,11 @@ class RedisCache:
 def startup_redis_check() -> bool:
     try:
         redis_client.ping()
-        print("✓ Redis connection successful")
+        print("Redis connection successful")
         return True
     except redis.RedisError as e:
         raise RedisConnectionError(f"Redis connection failed: {str(e)}")
 
-# Create cache instance
 cache = RedisCache()
 
 if __name__ == "__main__":

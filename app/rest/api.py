@@ -122,101 +122,27 @@ async def get_recommendations_for_business(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting recommendations for business: {str(e)}")
 
-@app.post("/cache/clear")
-async def clear_cache():
+@app.post("/cache/demographics")
+async def cache_demographics():
     try:
-        from ..datastore.cache_manager import clear_data_cache, invalidate_recommendations_cache
+        from ..config.db import get_db
+        from ..service.demographics_calculator import DemographicsCalculator
         
-        general_cleared = clear_data_cache()
-        recommendations_cleared = invalidate_recommendations_cache()
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": "Cache cleared successfully",
-                "general_keys_cleared": general_cleared,
-                "recommendation_keys_cleared": recommendations_cleared
-            }
-        )
-    except RedisConnectionError as e:
-        raise HTTPException(status_code=503, detail=f"Cache service unavailable: {str(e)}")
-    except RedisOperationError as e:
-        raise HTTPException(status_code=500, detail=f"Cache operation failed: {str(e)}")
+        db_gen = get_db()
+        db = next(db_gen)
+        try:
+            calculator = DemographicsCalculator(db)
+            results = calculator.   cache_all_demographics()
+            
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "message": "Demographics calculation and caching completed",
+                    "results": results
+                }
+            )
+        finally:
+            db.close()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
-
-@app.post("/cache/populate")
-async def populate_demographic_cache():
-    try:
-        from ..datastore.populate_cache import populate_sample_demographic_data
-        
-        result = populate_sample_demographic_data()
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": "Demographic cache populated successfully",
-                "malls_cached": result["malls"],
-                "businesses_cached": result["businesses"]
-            }
-        )
-    except RedisConnectionError as e:
-        raise HTTPException(status_code=503, detail=f"Cache service unavailable: {str(e)}")
-    except RedisOperationError as e:
-        raise HTTPException(status_code=500, detail=f"Cache operation failed: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error populating cache: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error populating cache: {str(e)}")
-
-@app.get("/cache/coverage")
-async def check_cache_coverage():
-    try:
-        from ..datastore.populate_cache import check_demographic_cache_coverage
-        
-        coverage = check_demographic_cache_coverage()
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "coverage": coverage
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error checking cache coverage: {str(e)}")
-
-@app.post("/cache/init")
-async def init_demographic_cache():
-    try:
-        from ..datastore.populate_cache import check_and_init_cache
-        
-        result = check_and_init_cache()
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "result": result
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error initializing cache: {str(e)}")
-
-@app.get("/cache/status")
-async def get_cache_status():
-    try:
-        from ..datastore.cache_manager import get_cache_status
-        status = get_cache_status()
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "cache_status": status
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting cache status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error caching demographics: {str(e)}")

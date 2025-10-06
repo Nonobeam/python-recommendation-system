@@ -3,16 +3,14 @@ from ..config.db import SessionLocal
 from ..model.models import Mall, Business
 from ..exception import DemographicDataError, BusinessDataError
 from .cache_manager import (
-    cache_mall_demographic, 
     get_cached_mall_demographic,
-    cache_business_data,
     get_cached_business_data,
     clear_data_cache, 
     get_cache_status
 )
 
 def extract_mall_data():
-    print("✓ Fetching mall data from database")
+    print("Fetching mall data from database")
     with SessionLocal() as session:
         malls = session.query(Mall).all()
         data = []
@@ -38,7 +36,7 @@ def extract_mall_data():
         return pd.DataFrame(data)
 
 def extract_business_data():
-    print("✓ Fetching business data from database")
+    print("Fetching business data from database")
     with SessionLocal() as session:
         businesses = session.query(Business).all()
         data = []
@@ -81,7 +79,7 @@ def run_etl(use_cache: bool = True):
         use_cache: Whether to use cached data if available
     """
     if not use_cache:
-        print("✓ Running ETL without cache")
+        print("Running ETL without cache")
         clear_data_cache()
     
     # Show cache status
