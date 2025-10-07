@@ -123,10 +123,3 @@ def get_matches_for_business(business_id: str, limit: int = 10, use_cache: bool 
         cache_recommendations(top_matches, cache_key, expire=1800)
     
     return top_matches
-    
-    top_matches = sorted(matches, key=lambda x: x["score"], reverse=True)[:limit]
-    
-    if use_cache:
-        cache_recommendations(top_matches, cache_key, expire=1800)
-    
-    return top_matches
