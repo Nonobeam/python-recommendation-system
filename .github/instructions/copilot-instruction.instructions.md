@@ -26,6 +26,8 @@ app/
   app.py            # Entry point of the application (renamed from server.py)
 mcp-server/
   mcp_server.py     # MCP server for Gemini AI integration
+  config.py         # Security and database configuration
+  security.py       # SQL injection prevention and validation
 
 # Code logging
 Don't use icon/emoji in logging messages.
@@ -46,6 +48,127 @@ Use this command to install dependencies "pip install -r requirements.txt".
 Use this command to install a specific package "pip install package-name".
 Use this command to install a specific package with version "pip install package-name==version".
 Remember to always add the package to requirements.txt file.
+
+# Build an MCP client
+
+## Overview
+When building MCP clients for this project, follow the Python implementation guidelines since this is a Python-based recommendation system.
+
+## System Requirements
+- Python 3.8 or higher (already met in this project)
+- Virtual environment (already configured as .venv)
+- MCP Python SDK (already installed)
+- Required dependencies in requirements.txt
+
+## MCP Client Implementation Guidelines
+
+### Basic Client Structure
+Always create MCP clients following this pattern:
+
+```python
+import asyncio
+from typing import Optional
+from contextlib import AsyncExitStack
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+class MCPClient:
+    def __init__(self):
+        self.session: Optional[ClientSession] = None
+        self.exit_stack = AsyncExitStack()
+    
+    async def connect_to_server(self, server_script_path: str):
+        # Server connection logic
+        pass
+    
+    async def process_query(self, query: str) -> str:
+        # Query processing logic
+        pass
+    
+    async def cleanup(self):
+        # Resource cleanup
+        await self.exit_stack.aclose()
+```
+
+### Server Connection Management
+- Support both Python (.py) and JavaScript (.js) servers
+- Use StdioServerParameters for server configuration
+- Always validate server script extensions
+- Implement proper error handling for connection failures
+
+### Query Processing Logic
+- Use async/await patterns consistently
+- Handle tool calls through the MCP session
+- Maintain conversation context when needed
+- Process responses and format output appropriately
+
+### Resource Management
+- Always use AsyncExitStack for proper cleanup
+- Close connections when done
+- Handle server disconnections gracefully
+- Implement timeout handling for long-running operations
+
+### Integration with Existing System
+When creating MCP clients for this recommendation system:
+
+1. **Import Existing Modules**: Leverage existing database models and services
+2. **Use Environment Configuration**: Read API keys and configuration from .env
+3. **Follow Project Structure**: Place MCP clients in appropriate service directories
+4. **Security First**: Apply the same security validation as the MCP server
+5. **Error Handling**: Use existing exception classes from app/exception/
+
+### Example Integration Pattern
+```python
+# For this project's structure
+from app.config.db import get_db
+from app.service.security import SecurityValidator
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+class RecommendationMCPClient:
+    def __init__(self):
+        self.session = None
+        self.db = get_db()
+        
+    async def query_recommendations(self, message: str) -> Dict[str, Any]:
+        # Validate input using existing security
+        if not SecurityValidator.validate_query_message(message):
+            raise ValueError("Invalid query message")
+            
+        # Process through MCP server
+        result = await self.session.call_tool("query_mall_data", {"message": message})
+        return result
+```
+
+### Best Practices for This Project
+
+1. **Reuse Existing Infrastructure**
+   - Use existing database connections
+   - Leverage current security validation
+   - Follow established error handling patterns
+
+2. **Maintain Consistency**
+   - Follow the same async patterns as existing services
+   - Use consistent response formats
+   - Apply the same logging standards (no emojis)
+
+3. **Security Integration**
+   - Always validate inputs using SecurityValidator
+   - Apply the same SQL injection prevention
+   - Use existing error response formats
+
+4. **Performance Considerations**
+   - Implement connection pooling when appropriate
+   - Cache MCP responses when beneficial
+   - Use existing Redis caching infrastructure
+
+### Testing MCP Clients
+- Create simple test scripts to verify connectivity
+- Test with actual MCP servers, not just mocks
+- Validate security features work correctly
+- Ensure proper cleanup in all scenarios
+
+This approach ensures MCP clients integrate seamlessly with the existing recommendation system while following MCP protocol standards.
 
 # API Documentation
 ## Mall-Business Recommendation API
@@ -97,54 +220,39 @@ GET /cache/status - Check cache status
 GET /mcp/tools - Get list of available MCP tools
 GET /mcp/tools/{tool_name} - Get details for a specific MCP tool
 GET /mcp/status - Get MCP server status and configuration
-POST /mcp/generate-content - Generate content using Gemini AI
+POST /mcp/query-malls - Query mall database using natural language AI
 
-##### Generate Content API Example
+##### Query Malls with AI API Example
 ```bash
-curl -X POST "http://localhost:8000/mcp/generate-content" \
+curl -X POST "http://localhost:8000/mcp/query-malls" \
   -H "Content-Type: application/json" \
   -d '{
-    "text": "Explain how AI can help match businesses with mall locations",
-    "operation": "generateContent",
-    "max_output_tokens": 500,
-    "temperature": 0.7,
-    "top_p": 0.9,
-    "top_k": 60
+    "message": "Find malls in District 1 with rent under $1000"
   }'
 ```
 
 Request Parameters:
-- `text` (required): Text prompt to send to Gemini
-- `operation` (optional): API operation ("generateContent", "streamGenerateContent", "countTokens")
-- `max_output_tokens` (optional): Maximum tokens to generate (1-8192, default: 2048)
-- `temperature` (optional): Controls randomness (0.0-2.0, default: 1.0)
-- `top_p` (optional): Nucleus sampling parameter (0.0-1.0, default: 0.95)
-- `top_k` (optional): Top-k sampling parameter (1-100, default: 64)
+- `message` (required): Natural language query about malls
 
 Response format:
 ```json
 {
   "success": true,
-  "operation": "generateContent",
-  "input_text": "Explain how AI can help match businesses with mall locations",
-  "generation_config": {
-    "max_output_tokens": 500,
-    "temperature": 0.7,
-    "top_p": 0.9,
-    "top_k": 60
-  },
+  "query": "Find malls in District 1 with rent under $1000",
   "result": {
-    "candidates": [
+    "malls": [
       {
-        "content": {
-          "parts": [
-            {
-              "text": "AI-generated content here..."
-            }
-          ]
-        }
+        "mall_id": "uuid",
+        "name": "Mall Name",
+        "district": "District 1",
+        "rent_price_usd": 950,
+        "address": "Full address",
+        "management_fee_usd": 100,
+        "avg_daily_visitors": 5000
       }
-    ]
+    ],
+    "success": true,
+    "total_found": 1
   }
 }
 ```
@@ -176,27 +284,27 @@ GEMINI_API_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.
 
 ### MCP Server Available Tools
 
-#### 1. gemini_generate_content
-Generate content using Google Gemini API with configurable operations.
+#### 1. query_mall_data
+Secure query mall database using natural language with AI-powered search criteria extraction and SQL injection prevention.
 
 Parameters:
-- text (required): Text prompt to send to Gemini
-- operation (optional): API operation (generateContent, streamGenerateContent, countTokens)
+- message (required): Natural language query about malls (e.g., 'find malls in District 1 with rent under $1000')
 
-#### 2. recommendation_analysis
-Analyze business/mall compatibility using Gemini AI.
+Security Features:
+- SQL injection prevention with parameterized queries
+- Input validation and sanitization
+- Blocked keyword detection
+- Field validation against allowed database schema
+- Maximum query length limits
+- Response data sanitization
 
-Parameters:
-- mall_data (optional): Mall information for analysis
-- business_data (optional): Business information for analysis
-- analysis_type (required): compatibility, market_fit, risk_assessment, optimization_suggestions
-
-#### 3. demographic_insights
-Generate demographic insights and market analysis.
-
-Parameters:
-- demographic_data (required): Demographic data to analyze
-- insight_type (required): trend_analysis, target_audience, market_opportunities, competitive_analysis
+The tool uses Google Gemini API to:
+1. Extract search criteria from natural language input
+2. Validate and sanitize all inputs for security
+3. Map criteria to allowed database fields: name, type, avg_daily_visitors, rent_price_usd, management_fee_usd, vat_percent, motorbike_fee_vnd, car_fee_vnd, electricity_policy, overtime_fee_policy, lease_term, deposit_policy, payment_policy, address, city, district
+4. Build secure parameterized SQL queries
+5. Execute queries with additional syntax validation
+6. Return sanitized mall data with success indicators
 
 ### API URL Configuration
 The GEMINI_API_URL supports different operations:
@@ -209,6 +317,31 @@ The GEMINI_API_URL supports different operations:
 - Keep your .env file in .gitignore
 - Rotate your API keys regularly
 - Monitor your API usage and costs
+- All database queries use parameterized statements to prevent SQL injection
+- Input validation prevents malicious content from reaching the database
+- Response sanitization ensures only safe data is returned to users
+
+### Security Configuration
+The MCP server includes comprehensive security layers:
+
+#### Input Validation (`mcp-server/security.py`)
+- Message length limits (max 1000 characters)
+- Blocked SQL keywords detection
+- Character validation using regex patterns
+- Numeric value range validation
+- Maximum criteria count limits
+
+#### Query Builder (`mcp-server/security.py`)
+- Parameterized SQL queries only
+- Field validation against allowed schema
+- Query syntax validation
+- Automatic result limiting (max 100 rows)
+
+#### Configuration (`mcp-server/config.py`)
+- Centralized security settings
+- Database field definitions with validation rules
+- Gemini API configuration
+- Type validation and constraints
 
 ### Starting the MCP Server
 Run the MCP server using Python directly:

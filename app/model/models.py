@@ -1,18 +1,14 @@
-from sqlalchemy import Column, String, Integer, Float, Boolean, Numeric, ForeignKey, DateTime, Text
+from sqlalchemy import TEXT, Column, String, Integer, Float, Boolean, Numeric, ForeignKey, DateTime, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
-import uuid
 
 Base = declarative_base()
-
-def generate_uuid():
-    return str(uuid.uuid4())
 
 
 class Mall(Base):
     __tablename__ = "mall"
 
-    id = Column(String, primary_key=True, default=generate_uuid, index=True)
+    id = Column(String, primary_key=True, index=True)
     name = Column(Text, nullable=False)
     type = Column(Text)
     avg_daily_visitors = Column(Integer)
@@ -26,13 +22,17 @@ class Mall(Base):
     lease_term = Column(Text)
     deposit_policy = Column(Text)
     payment_policy = Column(Text)
+    address = Column(Text)
+    city = Column(Text)
+    district = Column(Text)
+    geo_point = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class Zone(Base):
     __tablename__ = "zone"
 
-    id = Column(String, primary_key=True, default=generate_uuid, index=True)
+    id = Column(String, primary_key=True, index=True)
     name = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -40,7 +40,7 @@ class Zone(Base):
 class Booth(Base):
     __tablename__ = "booth"
 
-    id = Column(String, primary_key=True, default=generate_uuid, index=True)
+    id = Column(String, primary_key=True, index=True)
     mall_id = Column(String, ForeignKey("mall.id", ondelete="CASCADE"), nullable=False, index=True)
     size_m2 = Column(Numeric, nullable=False)
     price = Column(Numeric, nullable=False)
@@ -53,7 +53,7 @@ class Booth(Base):
 class Business(Base):
     __tablename__ = "business"
 
-    id = Column(String, primary_key=True, default=generate_uuid, index=True)
+    id = Column(String, primary_key=True, index=True)
     name = Column(Text, nullable=False)
     category = Column(Text)
     brand_tier = Column(Text)
@@ -65,7 +65,7 @@ class Business(Base):
 class BusinessHistory(Base):
     __tablename__ = "business_history"
 
-    id = Column(String, primary_key=True, default=generate_uuid, index=True)
+    id = Column(String, primary_key=True, index=True)
     business_id = Column(String, ForeignKey("business.id", ondelete="CASCADE"), nullable=False, index=True)
     mall_id = Column(String, ForeignKey("mall.id", ondelete="CASCADE"), nullable=False, index=True)
     revenue = Column(Numeric)

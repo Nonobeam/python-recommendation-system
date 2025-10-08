@@ -169,45 +169,120 @@ Phrase 3 = learn weights + nonlinear patterns from data.
 
 # Code detail
 
-app/config/db.py
+app/model/models.py
 ```python
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-from dotenv import load_dotenv
-from pathlib import Path
-import os
-
-root_path = Path(__file__).parent.parent.parent
-env_path = root_path / ".env"
-load_dotenv(dotenv_path=env_path)
-load_dotenv()
-
-DB_USERNAME = os.getenv("DB_USERNAME")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT")
-DB_NAME = os.getenv("DB_NAME")
-DB_SCHEMA = os.getenv("DB_SCHEMA")
-
-DATABASE_URL = (
-    f"postgresql+psycopg2://{DB_USERNAME}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    f"?options=-c%20search_path%3D{DB_SCHEMA}"
-)
-
-engine = create_engine(DATABASE_URL, echo=False, future=True)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+from sqlalchemy import TEXT, Column, String, Integer, Float, Boolean, Numeric, ForeignKey, DateTime, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.sql import func
 
 Base = declarative_base()
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+
+class Mall(Base):
+    __tablename__ = "mall"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(Text, nullable=False)
+    type = Column(Text)
+    avg_daily_visitors = Column(Integer)
+    rent_price_usd = Column(Numeric(10, 2))
+    management_fee_usd = Column(Numeric(10, 2))
+    vat_percent = Column(Numeric(5, 2))
+    motorbike_fee_vnd = Column(Numeric(12, 0))
+    car_fee_vnd = Column(Numeric(12, 0))
+    electricity_policy = Column(Text)
+    overtime_fee_policy = Column(Text)
+    lease_term = Column(Text)
+    deposit_policy = Column(Text)
+    payment_policy = Column(Text)
+    address = Column(Text)
+    city = Column(Text)
+    district = Column(Text)
+    geo_point = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Zone(Base):
+    __tablename__ = "zone"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Booth(Base):
+    __tablename__ = "booth"
+
+    id = Column(String, primary_key=True, index=True)
+    mall_id = Column(String, ForeignKey("mall.id", ondelete="CASCADE"), nullable=False, index=True)
+    size_m2 = Column(Numeric, nullable=False)
+    price = Column(Numeric, nullable=False)
+    floor_level = Column(Integer)
+    zone = Column(String(10), nullable=False)
+    is_available = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Business(Base):
+    __tablename__ = "business"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(Text, nullable=False)
+    category = Column(Text)
+    brand_tier = Column(Text)
+    budget = Column(Numeric)
+    required_size = Column(Numeric)
+    visitor_capacity = Column(Integer)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class BusinessHistory(Base):
+    __tablename__ = "business_history"
+
+    id = Column(String, primary_key=True, index=True)
+    business_id = Column(String, ForeignKey("business.id", ondelete="CASCADE"), nullable=False, index=True)
+    mall_id = Column(String, ForeignKey("mall.id", ondelete="CASCADE"), nullable=False, index=True)
+    revenue = Column(Numeric)
+    success = Column(Boolean)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 ```
 
-app/config/redis.py
+app/app.py
+```python
+import uvicorn
+import os
+import sys
+from pathlib import Path
+
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+def startup_checks():
+    from app.config.redis import startup_redis_check
+    
+    if not startup_redis_check():
+        print("Redis connection failed - service may not work properly")
+        return False
+
+    print("All startup checks passed")
+    return True
+
+if __name__ == "__main__":
+    startup_checks()
+
+    port = int(os.getenv("PORT", 8000))
+
+    print(f"Starting server at http://0.0.0.0:{port}")
+    uvicorn.run(
+        "app.rest.api:app",
+        host="0.0.0.0", 
+        port=port,
+        reload=True,
+        log_level="info"
+    )
+```
+
+app/config/db.py
+```python
 ```python
 import redis
 from dotenv import load_dotenv
@@ -899,6 +974,412 @@ class DemographicsCalculator:
                 results["errors"].append(f"Business {business.id}: {str(e)}")
 
         return results
+```
+
+# MCP Integration (Phase 3)
+
+## MCP Server for AI-Powered Content Generation
+
+The system now includes Model Context Protocol (MCP) integration for AI-powered content generation using Google's Gemini API.
+
+### MCP Server (mcp-server/mcp_server.py)
+```python
+import asyncio
+import json
+import os
+import httpx
+from typing import Any, Dict, List
+from dotenv import load_dotenv
+from pathlib import Path
+
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.types import Tool, TextContent
+
+# Load environment variables
+root_path = Path(__file__).parent.parent
+env_path = root_path / ".env"
+load_dotenv(dotenv_path=env_path)
+
+# Gemini API configuration
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_URL = os.getenv("GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent")
+
+# Create MCP server
+server = Server("recommendation-gemini-server")
+
+class GeminiAPIClient:
+    """Client for interacting with Google Gemini API"""
+    
+    def __init__(self, api_key: str, api_url: str):
+        self.api_key = api_key
+        self.api_url = api_url
+        self.headers = {
+            'Content-Type': 'application/json',
+            'X-goog-api-key': api_key
+        }
+    
+    async def generate_content(self, text: str, operation: str = "generateContent") -> Dict[str, Any]:
+        """Generate content using Gemini API"""
+        url = self.api_url.replace("generateContent", operation)
+        
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": text
+                        }
+                    ]
+                }
+            ]
+        }
+        
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(
+                    url,
+                    headers=self.headers,
+                    json=payload,
+                    timeout=30.0
+                )
+                response.raise_for_status()
+                return response.json()
+                
+            except httpx.HTTPError as e:
+                return {
+                    "error": f"HTTP error: {str(e)}",
+                    "status_code": getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
+                }
+            except Exception as e:
+                return {
+                    "error": f"Unexpected error: {str(e)}"
+                }
+
+# Initialize Gemini client
+gemini_client = None
+if GEMINI_API_KEY:
+    gemini_client = GeminiAPIClient(GEMINI_API_KEY, GEMINI_API_URL)
+
+@server.list_tools()
+async def list_tools() -> List[Tool]:
+    """List available MCP tools"""
+    tools = [
+        Tool(
+            name="gemini_generate_content",
+            description="Generate content using Google Gemini API",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "Text prompt to send to Gemini"
+                    },
+                    "operation": {
+                        "type": "string",
+                        "description": "API operation to perform",
+                        "default": "generateContent",
+                        "enum": ["generateContent", "streamGenerateContent", "countTokens"]
+                    }
+                },
+                "required": ["text"]
+            }
+        )
+    ]
+    
+    if not GEMINI_API_KEY:
+        tools = [tool for tool in tools if not tool.name.startswith("gemini_")]
+        
+    return tools
+
+@server.call_tool()
+async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
+    """Handle tool calls"""
+    
+    if name == "gemini_generate_content":
+        if not gemini_client:
+            return [TextContent(
+                type="text",
+                text="Error: Gemini API key not configured. Please set GEMINI_API_KEY in environment variables."
+            )]
+        
+        text = arguments.get("text", "")
+        operation = arguments.get("operation", "generateContent")
+        
+        if not text:
+            return [TextContent(
+                type="text",
+                text="Error: No text provided for content generation."
+            )]
+        
+        result = await gemini_client.generate_content(text, operation)
+        
+        return [TextContent(
+            type="text",
+            text=json.dumps(result, indent=2)
+        )]
+    
+    else:
+        return [TextContent(
+            type="text",
+            text=f"Error: Unknown tool '{name}'"
+        )]
+
+async def main():
+    """Main server entry point"""
+    if GEMINI_API_KEY:
+        print("Gemini API key configured")
+    else:
+        print("Gemini API key not found in environment. Set GEMINI_API_KEY to enable Gemini features.")
+    
+    print(f"Starting MCP server with URL: {GEMINI_API_URL}")
+    print("Available tools: gemini_generate_content")
+    
+    async with stdio_server() as streams:
+        await server.run(
+            streams[0], 
+            streams[1], 
+            initialization_options={}
+        )
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### MCP Client Integration (app/service/mcp_client.py)
+```python
+"""
+MCP Integration for communicating with Gemini API
+Simplified version that directly uses the MCP server logic
+"""
+import asyncio
+import json
+import os
+from typing import Dict, Any
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables
+root_path = Path(__file__).parent.parent.parent
+env_path = root_path / ".env"
+load_dotenv(dotenv_path=env_path)
+
+class SimpleMCPManager:
+    """Simplified MCP manager that directly uses Gemini API logic"""
+    
+    def __init__(self):
+        self.api_key = os.getenv("GEMINI_API_KEY")
+        self.api_url = os.getenv("GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent")
+        
+    async def generate_content(self, text: str, operation: str = "generateContent", 
+                             max_output_tokens: int = 2048, temperature: float = 1.0,
+                             top_p: float = 0.95, top_k: int = 64) -> Dict[str, Any]:
+        """Generate content using Gemini API with configurable parameters"""
+        if not self.api_key:
+            raise Exception("Gemini API key not configured. Please set GEMINI_API_KEY in environment variables.")
+        
+        if not text.strip():
+            raise Exception("No text provided for content generation.")
+        
+        try:
+            import httpx
+            
+            # Replace operation in URL if needed
+            url = self.api_url.replace("generateContent", operation)
+            
+            headers = {
+                'Content-Type': 'application/json',
+                'X-goog-api-key': self.api_key
+            }
+            
+            payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {
+                                "text": text
+                            }
+                        ]
+                    }
+                ],
+                "generationConfig": {
+                    "maxOutputTokens": max_output_tokens,
+                    "temperature": temperature,
+                    "topP": top_p,
+                    "topK": top_k
+                }
+            }
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    url,
+                    headers=headers,
+                    json=payload,
+                    timeout=30.0
+                )
+                response.raise_for_status()
+                return response.json()
+                
+        except Exception as e:
+            raise Exception(f"Failed to generate content: {str(e)}")
+    
+    async def get_available_tools(self) -> Dict[str, Any]:
+        """Get list of available tools"""
+        tools = [
+            {
+                "name": "gemini_generate_content",
+                "description": "Generate content using Google Gemini API with configurable parameters",
+                "status": "available" if self.api_key else "requires_api_key",
+                "parameters": {
+                    "text": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Text prompt to send to Gemini"
+                    },
+                    "operation": {
+                        "type": "string",
+                        "required": False,
+                        "default": "generateContent",
+                        "options": ["generateContent", "streamGenerateContent", "countTokens"],
+                        "description": "API operation to perform"
+                    },
+                    "max_output_tokens": {
+                        "type": "integer",
+                        "required": False,
+                        "default": 2048,
+                        "min": 1,
+                        "max": 8192,
+                        "description": "Maximum number of tokens to generate"
+                    },
+                    "temperature": {
+                        "type": "number",
+                        "required": False,
+                        "default": 1.0,
+                        "min": 0.0,
+                        "max": 2.0,
+                        "description": "Controls randomness of output (0.0 = deterministic, 2.0 = very creative)"
+                    },
+                    "top_p": {
+                        "type": "number",
+                        "required": False,
+                        "default": 0.95,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "description": "Nucleus sampling parameter"
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "required": False,
+                        "default": 64,
+                        "min": 1,
+                        "max": 100,
+                        "description": "Top-k sampling parameter"
+                    }
+                }
+            }
+        ]
+        
+        return {
+            "tools": tools,
+            "count": len(tools)
+        }
+    
+    async def close(self):
+        """Clean up resources (no-op for simplified version)"""
+        pass
+
+# Global MCP manager instance
+mcp_manager = SimpleMCPManager()
+```
+
+### Updated REST API with MCP Integration
+
+The REST API now includes MCP endpoints for AI-powered content generation:
+
+#### New API Endpoints:
+- `GET /mcp/tools` - List available MCP tools
+- `GET /mcp/tools/{tool_name}` - Get specific tool details
+- `GET /mcp/status` - Get MCP server status
+- `POST /mcp/generate-content` - Generate content using Gemini AI
+
+#### Generate Content API with Token Limits:
+```python
+class GeminiContentRequest(BaseModel):
+    text: str
+    operation: Optional[str] = "generateContent"
+    max_output_tokens: Optional[int] = 2048
+    temperature: Optional[float] = 1.0
+    top_p: Optional[float] = 0.95
+    top_k: Optional[int] = 64
+
+@app.post("/mcp/generate-content")
+async def generate_content_with_gemini(request: GeminiContentRequest):
+    """Generate content using Gemini API through MCP server with configurable parameters"""
+    try:
+        from ..service.mcp_client import mcp_manager
+
+        # Validate input and parameters
+        text = request.text
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="Text parameter cannot be empty")
+        
+        # Validate token limits and generation parameters
+        if request.max_output_tokens < 1 or request.max_output_tokens > 8192:
+            raise HTTPException(status_code=400, detail="max_output_tokens must be between 1 and 8192")
+        
+        # Use MCP server to generate content with parameters
+        result = await mcp_manager.generate_content(
+            text=text, 
+            operation=request.operation,
+            max_output_tokens=request.max_output_tokens,
+            temperature=request.temperature,
+            top_p=request.top_p,
+            top_k=request.top_k
+        )
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "operation": request.operation,
+                "input_text": text,
+                "generation_config": {
+                    "max_output_tokens": request.max_output_tokens,
+                    "temperature": request.temperature,
+                    "top_p": request.top_p,
+                    "top_k": request.top_k
+                },
+                "result": result
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating content via MCP: {str(e)}")
+```
+
+### Project Structure (Updated)
+```
+app/
+  config/          # Configuration files (db.py, redis.py)
+  exception/       # Custom exceptions
+  datastore/       # Data extraction and repository
+  model/          # Database models (updated without UUID generation)
+  service/        # Business logic, recommendation algorithms, and MCP integration
+    - features.py
+    - traffic.py
+    - demographics_calculator.py
+    - mcp_tools.py
+    - mcp_client.py (NEW)
+  rest/           # REST API endpoints (updated with MCP endpoints)
+  utils/          # Utility functions
+  app.py          # Entry point of the application (renamed from server.py)
+mcp-server/       # NEW: MCP server for Gemini AI integration
+  mcp_server.py   # MCP server implementation
+```
+
+This completes the integration of AI-powered content generation capabilities into the recommendation system using the Model Context Protocol framework.
 ```
 
 app/rest/api.py

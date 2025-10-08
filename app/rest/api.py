@@ -12,14 +12,6 @@ from ..exception.cache_exceptions import (
     BusinessDataError
 )
 
-class GeminiContentRequest(BaseModel):
-    text: str
-    operation: Optional[str] = "generateContent"
-    max_output_tokens: Optional[int] = 2048
-    temperature: Optional[float] = 1.0
-    top_p: Optional[float] = 0.95
-    top_k: Optional[int] = 64
-
 app = FastAPI(
     title="Mall-Business Recommendation API",
     description="API for matching malls with businesses based on demographics, traffic, and budget",
@@ -238,54 +230,26 @@ async def get_mcp_server_status():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving MCP server status: {str(e)}")
 
-@app.post("/mcp/generate-content")
-async def generate_content_with_gemini(request: GeminiContentRequest):
-    """Generate content using Gemini API through MCP server with configurable parameters"""
+@app.post("/mcp/query-malls")
+async def query_malls_with_ai(request: dict):
+    """Query mall database using natural language through AI"""
     try:
         from ..service.mcp_client import mcp_manager
 
         # Validate input
-        text = request.text
-        operation = request.operation
+        message = request.get("message", "")
         
-        if not text.strip():
-            raise HTTPException(status_code=400, detail="Text parameter cannot be empty")
+        if not message.strip():
+            raise HTTPException(status_code=400, detail="Message parameter cannot be empty")
         
-        # Validate token limits
-        if request.max_output_tokens < 1 or request.max_output_tokens > 8192:
-            raise HTTPException(status_code=400, detail="max_output_tokens must be between 1 and 8192")
-        
-        if not (0.0 <= request.temperature <= 2.0):
-            raise HTTPException(status_code=400, detail="temperature must be between 0.0 and 2.0")
-        
-        if not (0.0 <= request.top_p <= 1.0):
-            raise HTTPException(status_code=400, detail="top_p must be between 0.0 and 1.0")
-        
-        if request.top_k < 1 or request.top_k > 100:
-            raise HTTPException(status_code=400, detail="top_k must be between 1 and 100")
-        
-        # Use MCP server to generate content with parameters
-        result = await mcp_manager.generate_content(
-            text=text, 
-            operation=operation,
-            max_output_tokens=request.max_output_tokens,
-            temperature=request.temperature,
-            top_p=request.top_p,
-            top_k=request.top_k
-        )
+        # Use MCP server to query malls with AI
+        result = await mcp_manager.call_tool("query_mall_data", {"message": message})
         
         return JSONResponse(
             status_code=200,
             content={
                 "success": True,
-                "operation": operation,
-                "input_text": text,
-                "generation_config": {
-                    "max_output_tokens": request.max_output_tokens,
-                    "temperature": request.temperature,
-                    "top_p": request.top_p,
-                    "top_k": request.top_k
-                },
+                "query": message,
                 "result": result
             }
         )
@@ -293,4 +257,4 @@ async def generate_content_with_gemini(request: GeminiContentRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating content via MCP: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error querying malls via AI: {str(e)}")
