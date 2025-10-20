@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
-from typing import List, Dict, Optional
-from pydantic import BaseModel
+from typing import List, Dict
 from ..service.traffic import get_top_matches, get_matches_for_mall, get_matches_for_business
 from ..service.mcp_tools import MCPToolService
 from ..exception.cache_exceptions import (
@@ -17,14 +16,6 @@ app = FastAPI(
     description="API for matching malls with businesses based on demographics, traffic, and budget",
     version="1.0.0"
 )
-
-@app.get("/")
-async def root():
-    return {"message": "Mall-Business Recommendation API", "status": "active"}
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "service": "recommendation-api"}
 
 @app.get("/recommendations", response_model=List[Dict])
 async def get_recommendations(

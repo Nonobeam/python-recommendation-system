@@ -8,9 +8,15 @@ sys.path.insert(0, str(project_root))
 
 def startup_checks():
     from app.config.redis import startup_redis_check
+    from app.config.elasticsearch import startup_elasticsearch_check
     
     if not startup_redis_check():
         print("Redis connection failed - service may not work properly")
+        return False
+    
+    if not startup_elasticsearch_check():
+        print("Elasticsearch connection failed - search features will be unavailable")
+        print("Make sure Elasticsearch is running on http://localhost:9200")
         return False
 
     print("All startup checks passed")
@@ -23,7 +29,7 @@ if __name__ == "__main__":
 
     print(f"Starting server at http://0.0.0.0:{port}")
     uvicorn.run(
-        "app.rest.api:app",
+        "app.rest.main:app",
         host="0.0.0.0", 
         port=port,
         reload=True,
