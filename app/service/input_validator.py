@@ -122,7 +122,6 @@ class InputValidator:
         if InputValidator.contains_sensitive_info(sanitized):
             return False, "Message may contain sensitive information"
         
-        # Check if mall-related (optional - could be warning instead of error)
         if not InputValidator.is_mall_related(sanitized):
             # For now, just allow non-mall queries but could log this
             pass
