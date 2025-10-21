@@ -4,7 +4,13 @@ import os
 import json
 from typing import Optional, Any
 from pathlib import Path
-from ..exception import RedisConnectionError, RedisOperationError
+import sys
+
+app_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(app_dir))
+
+from exception import RedisConnectionError, RedisOperationError
+from utils.logger import redis_logger
 
 root_path = Path(__file__).parent.parent.parent
 env_path = root_path / ".env"
@@ -25,7 +31,7 @@ redis_pool = redis.ConnectionPool(
     max_connections=20
 )
 
-print(f"Connecting to Redis at redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
+redis_logger.info(f"Connecting to Redis at redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
 
 redis_client = redis.Redis(connection_pool=redis_pool)
 
@@ -76,9 +82,10 @@ class RedisCache:
 def startup_redis_check() -> bool:
     try:
         redis_client.ping()
-        print("Redis connection successful")
+        redis_logger.info("Redis connection successful")
         return True
     except redis.RedisError as e:
+        redis_logger.error(f"Redis connection failed: {str(e)}")
         raise RedisConnectionError(f"Redis connection failed: {str(e)}")
 
 cache = RedisCache()

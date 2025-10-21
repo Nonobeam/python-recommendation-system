@@ -1,8 +1,15 @@
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from typing import List, Dict
-from ..service.traffic import get_top_matches, get_matches_for_mall, get_matches_for_business
-from ..exception.cache_exceptions import (
+
+import sys
+from pathlib import Path
+
+app_dir = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(app_dir))
+
+from service.traffic import get_top_matches, get_matches_for_mall, get_matches_for_business
+from exception.cache_exceptions import (
     RedisConnectionError, 
     RedisOperationError, 
     CacheError, 

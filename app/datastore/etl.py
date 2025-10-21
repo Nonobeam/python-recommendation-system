@@ -1,8 +1,15 @@
 import pandas as pd
-from ..config.db import SessionLocal
-from ..model.models import Mall, Business
-from ..exception import DemographicDataError, BusinessDataError
-from .cache_manager import (
+import sys
+from pathlib import Path
+
+app_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(app_dir))
+
+from config.db import SessionLocal
+from model.models import Mall, Business
+from exception import DemographicDataError, BusinessDataError
+from utils.logger import etl_logger
+from datastore.cache_manager import (
     get_cached_mall_demographic,
     get_cached_business_data,
     clear_data_cache, 
@@ -10,7 +17,7 @@ from .cache_manager import (
 )
 
 def extract_mall_data():
-    print("Fetching mall data from database")
+    etl_logger.info("Fetching mall data from database")
     with SessionLocal() as session:
         malls = session.query(Mall).all()
         data = []
@@ -36,7 +43,7 @@ def extract_mall_data():
         return pd.DataFrame(data)
 
 def extract_business_data():
-    print("Fetching business data from database")
+    etl_logger.info("Fetching business data from database")
     with SessionLocal() as session:
         businesses = session.query(Business).all()
         data = []
@@ -79,12 +86,12 @@ def run_etl(use_cache: bool = True):
         use_cache: Whether to use cached data if available
     """
     if not use_cache:
-        print("Running ETL without cache")
+        etl_logger.info("Running ETL without cache")
         clear_data_cache()
     
     # Show cache status
     cache_status = get_cache_status()
-    print(f"Cache status: {cache_status}")
+    etl_logger.debug(f"Cache status: {cache_status}")
     
     malls_raw = extract_mall_data()
     businesses_raw = extract_business_data()

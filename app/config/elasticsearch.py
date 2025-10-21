@@ -5,8 +5,13 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 import httpx
 from dotenv import load_dotenv
+import sys
 
-# Load environment variables
+app_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(app_dir))
+
+from utils.logger import elasticsearch_logger
+
 root_path = Path(__file__).parent.parent.parent
 env_path = root_path / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -17,7 +22,7 @@ try:
 except ImportError:
     Elasticsearch = None
 
-from ..exception.custom_exceptions import AIProcessingError, GeminiAPIError, MCPValidationError
+from exception.custom_exceptions import AIProcessingError, GeminiAPIError, MCPValidationError
 
 class AISearchService:
     """Service for AI-powered search query processing using Gemini API"""
@@ -253,16 +258,15 @@ class ElasticsearchService:
         try:
             client = self.get_client()
             info = client.info()
-            print(f"Connected to Elasticsearch cluster: {info.get('cluster_name', 'Unknown')}")
+            elasticsearch_logger.info(f"Connected to Elasticsearch cluster: {info.get('cluster_name', 'Unknown')}")
             return True
         except Exception as e:
-            print(f"Failed to connect to Elasticsearch: {str(e)}")
+            elasticsearch_logger.error(f"Failed to connect to Elasticsearch: {str(e)}")
             return False
     
-    async def search_malls_with_ai(self, query: str, ai_service: AISearchService, size: int = 10) -> dict:
+    async def search_malls_with_ai(self, query: str, ai_service: AISearchService, page: int = 1, size: int = 10) -> dict:
         """Main function: Extract criteria using AI, then query Elasticsearch"""
         try:
-            # Step 1: Extract search criteria using AI
             extraction_result = await ai_service.extract_search_criteria(query)
             
             if not extraction_result["success"]:
@@ -274,15 +278,15 @@ class ElasticsearchService:
             
             criteria = extraction_result["criteria"]
             
-            # Step 2: Query Elasticsearch with extracted criteria
-            search_result = self.search_malls_with_ai_criteria(criteria, size)
+            search_result = self.search_malls_with_ai_criteria(criteria, page, size)
             
-            # Step 3: Return combined result
             return {
                 "success": search_result["success"],
                 "original_query": query,
                 "extracted_criteria": criteria,
                 "total_found": search_result.get("total", 0),
+                "page": page,
+                "size": size,
                 "results": search_result.get("results", []),
                 "error": search_result.get("error")
             }
@@ -294,10 +298,13 @@ class ElasticsearchService:
                 "results": []
             }
     
-    def search_malls_with_ai_criteria(self, criteria: Dict[str, Any], size: int = 10) -> dict:
-        """Search malls using AI-extracted structured criteria"""
+    def search_malls_with_ai_criteria(self, criteria: Dict[str, Any], page: int = 1, size: int = 10) -> dict:
+        """Search malls using AI-extracted structured criteria with pagination"""
         try:
             client = self.get_client()
+            
+            # Calculate offset for pagination (page 1 = from 0, page 2 = from 10, etc.)
+            from_offset = (page - 1) * size
             
             query_parts = []
             
@@ -307,7 +314,11 @@ class ElasticsearchService:
                 query_parts = self._build_structured_query(criteria)
             
             if not query_parts:
-                search_body = {"query": {"match_all": {}}, "size": size}
+                search_body = {
+                    "query": {"match_all": {}}, 
+                    "from": from_offset,
+                    "size": size
+                }
             else:
                 search_body = {
                     "query": {
@@ -315,6 +326,7 @@ class ElasticsearchService:
                             "must": query_parts
                         }
                     },
+                    "from": from_offset,
                     "size": size,
                     "_source": self._get_source_fields()
                 }
@@ -324,11 +336,19 @@ class ElasticsearchService:
                 body=search_body
             )
             
-            print(f"AI-powered search - Total hits: {response['hits']['total']['value']}")
+            total_hits = response["hits"]["total"]["value"]
+            returned_results = len(response["hits"]["hits"])
+            
+            elasticsearch_logger.debug(f"AI-powered search - Total hits: {total_hits}, Page: {page}, Size: {size}, From: {from_offset}")
             
             return {
                 "success": True,
-                "total": response["hits"]["total"]["value"],
+                "total": total_hits,
+                "page": page,
+                "size": size,
+                "from": from_offset,
+                "returned": returned_results,
+                "has_more": from_offset + returned_results < total_hits,
                 "results": [
                     {
                         **hit["_source"],
@@ -474,7 +494,7 @@ elasticsearch_service = ElasticsearchService()
 
 def startup_elasticsearch_check() -> bool:
     """Startup check for Elasticsearch connection"""
-    print("Checking Elasticsearch connection...")
+    elasticsearch_logger.info("Checking Elasticsearch connection...")
     
     try:
         from elasticsearch import Elasticsearch
@@ -509,12 +529,12 @@ def startup_elasticsearch_check() -> bool:
         client = Elasticsearch(**client_params)
         info = client.info()
         
-        print(f"Elasticsearch connection successful - Cluster: {info.get('cluster_name', 'Unknown')}")
+        elasticsearch_logger.info(f"Elasticsearch connection successful - Cluster: {info.get('cluster_name', 'Unknown')}")
         return True
         
     except ImportError:
-        print("Elasticsearch library not installed - search features will be unavailable")
+        elasticsearch_logger.warning("Elasticsearch library not installed - search features will be unavailable")
         return False
     except Exception as e:
-        print(f"Elasticsearch startup check failed: {str(e)}")
+        elasticsearch_logger.error(f"Elasticsearch startup check failed: {str(e)}")
         return False

@@ -1,7 +1,14 @@
-from ..config.redis import cache
-from ..exception.cache_exceptions import RedisOperationError, CacheError
+import sys
+from pathlib import Path
 import os
 from dotenv import load_dotenv
+
+app_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(app_dir))
+
+from config.redis import cache
+from exception.cache_exceptions import RedisOperationError, CacheError
+from utils.logger import cache_logger
 
 load_dotenv()
 
@@ -21,7 +28,7 @@ def get_cached_mall_demographic(mall_id: str):
     cache_key = f"{DEMOGRAPHIC_PREFIX}{mall_id}"
     cached = cache.get(cache_key)
     if not cached:
-        print(f"No cached demographic data for mall {mall_id}")
+        cache_logger.debug(f"No cached demographic data for mall {mall_id}")
     return cached
 
 
@@ -37,7 +44,7 @@ def get_cached_business_data(business_id: str):
     cache_key = f"{BUSINESS_PREFIX}{business_id}"
     cached = cache.get(cache_key)
     if not cached:
-        print(f"No cached business data for business {business_id}")
+        cache_logger.debug(f"No cached business data for business {business_id}")
     return cached
 
 
@@ -63,7 +70,7 @@ def cache_data(data: list, cache_key: str, expire: int = 3600):
 def get_cached_data(cache_key: str):
     cached = cache.get(cache_key)
     if not cached:
-        print(f"No cached data found for key: {cache_key}")
+        cache_logger.debug(f"No cached data found for key: {cache_key}")
     return cached
 
 
@@ -74,13 +81,13 @@ def clear_data_cache():
     for key in keys_to_clear:
         if cache.delete(key):
             cleared_count += 1
-            print(f"✓ Cleared cache key: {key}")
+            cache_logger.debug(f"Cleared cache key: {key}")
     
     demographic_pattern = f"{DEMOGRAPHIC_PREFIX}*"
     business_pattern = f"{BUSINESS_PREFIX}*"
     
-    print(f"Cleared {cleared_count} general cache keys")
-    print(f"Note: To clear demographic/business caches, use clear_all_demographic_cache() or clear_all_business_cache()")
+    cache_logger.info(f"Cleared {cleared_count} general cache keys")
+    cache_logger.debug(f"Note: To clear demographic/business caches, use clear_all_demographic_cache() or clear_all_business_cache()")
     return cleared_count
 
 def get_cache_status():

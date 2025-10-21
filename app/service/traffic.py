@@ -1,7 +1,13 @@
-from ..service.features import get_mall_vector, get_business_vector
-from ..datastore.cache_manager import cache_recommendations, get_cached_recommendations
+import sys
+from pathlib import Path
+
+app_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(app_dir))
+
+from service.features import get_mall_vector, get_business_vector
+from datastore.cache_manager import cache_recommendations, get_cached_recommendations
 from sklearn.metrics.pairwise import cosine_similarity
-from ..datastore.etl import run_etl
+from datastore.etl import run_etl
 import numpy as np
 
 
