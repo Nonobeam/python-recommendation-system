@@ -4,13 +4,9 @@ import os
 import json
 from typing import Optional, Any
 from pathlib import Path
-import sys
 
-app_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(app_dir))
-
-from exception import RedisConnectionError, RedisOperationError
-from utils.logger import redis_logger
+from app.exception import RedisConnectionError, RedisOperationError
+from app.utils.logger import redis_logger
 
 root_path = Path(__file__).parent.parent.parent
 env_path = root_path / ".env"

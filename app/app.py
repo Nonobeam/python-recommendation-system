@@ -1,10 +1,5 @@
 import uvicorn
 import os
-import sys
-from pathlib import Path
-
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
 
 from app.utils.logger import app_logger
 
@@ -31,7 +26,7 @@ if __name__ == "__main__":
 
     app_logger.info(f"Starting server at http://0.0.0.0:{port}")
     uvicorn.run(
-        "rest.private.main:app",
+        "app.rest.private.main:app",
         host="0.0.0.0", 
         port=port,
         reload=True,

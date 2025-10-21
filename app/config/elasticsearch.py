@@ -1,17 +1,12 @@
 import os
 import json
 import re
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from pathlib import Path
 import httpx
 from dotenv import load_dotenv
-import sys
 
-app_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(app_dir))
-
-from app.auth.token_data import TokenData
-from utils.logger import elasticsearch_logger
+from app.utils.logger import elasticsearch_logger
 
 root_path = Path(__file__).parent.parent.parent
 env_path = root_path / ".env"
@@ -23,7 +18,7 @@ try:
 except ImportError:
     Elasticsearch = None
 
-from exception.custom_exceptions import AIProcessingError, GeminiAPIError, MCPValidationError
+from app.exception.custom_exceptions import AIProcessingError, GeminiAPIError, MCPValidationError
 
 class AISearchService:
     """Service for AI-powered search query processing using Gemini API"""

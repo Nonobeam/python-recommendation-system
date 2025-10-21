@@ -4,16 +4,11 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
-import sys
-from pathlib import Path
 
-app_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(app_dir))
-
-from config.db import get_db
-from model.models import SearchHistory
-from model.action_type import ActionType
-from utils.logger import get_app_logger
+from app.config.db import get_db
+from app.model.models import SearchHistory
+from app.model.action_type import ActionType
+from app.utils.logger import get_app_logger
 
 logger = get_app_logger("search_history")
 

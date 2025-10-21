@@ -1,14 +1,9 @@
-import sys
-from pathlib import Path
-
-app_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(app_dir))
-
-from service.features import get_mall_vector, get_business_vector
-from datastore.cache_manager import cache_recommendations, get_cached_recommendations
 from sklearn.metrics.pairwise import cosine_similarity
-from datastore.etl import run_etl
 import numpy as np
+
+from app.service.features import get_mall_vector, get_business_vector
+from app.datastore.cache_manager import cache_recommendations, get_cached_recommendations
+from app.datastore.etl import run_etl
 
 
 def calculate_budget_fit(mall_vec, biz_vec):
@@ -37,29 +32,6 @@ def calculate_demographic_fit(mall_vec, biz_vec):
         else:
             demo_fit = 0.5
     return demo_fit
-
-
-def calculate_zone_compatibility(zone_data, biz):
-    """Calculate how well business fits in a specific zone"""
-    biz_requirements = biz.get('target_demographic', {}).get('requirements', {})
-    
-    min_traffic = biz_requirements.get('min_traffic_needed', 0)
-    zone_traffic = zone_data.get('avg_traffic_per_day', 0)
-    traffic_match = min(zone_traffic / max(min_traffic, 1), 1.0) if min_traffic > 0 else 0.5
-    
-    biz_budget = biz_requirements.get('budget', 0)
-    zone_avg_price = zone_data.get('avg_revenue_per_booth', 0)
-    if biz_budget > 0 and zone_avg_price > 0:
-        budget_match = 1.0 - abs(biz_budget - zone_avg_price) / max(biz_budget, zone_avg_price)
-        budget_match = max(0, budget_match)
-    else:
-        budget_match = 0.5
-    
-    zone_occupancy = zone_data.get('occupancy_rate', 0) / 100
-    occupancy_score = 1.0 - abs(zone_occupancy - 0.85)
-    
-    return 0.4 * traffic_match + 0.4 * budget_match + 0.2 * occupancy_score
-
 
 def calculate_historical_fit(mall, biz):
     """Score based on business's past success in similar malls"""
@@ -153,42 +125,6 @@ def compute_match(mall, biz):
         "tenant_mix_fit": float(tenant_mix_fit),
         "market_boost": float(market_boost),
         "score": float(min(final_score, 1.0))
-    }
-
-
-def compute_match_with_zones(mall, biz):
-    """Match business to best zone within mall"""
-    mall_vec = get_mall_vector(mall)
-    biz_vec = get_business_vector(biz)
-    
-    budget_fit = calculate_budget_fit(mall_vec, biz_vec)
-    traffic_fit = calculate_traffic_fit(mall_vec, biz_vec)
-    demo_fit = calculate_demographic_fit(mall_vec, biz_vec)
-    
-    zone_scores = {}
-    zone_performance = mall.get('demographic', {}).get('zone_performance', {})
-    
-    for zone_name, zone_data in zone_performance.items():
-        zone_score = calculate_zone_compatibility(zone_data, biz)
-        zone_scores[zone_name] = zone_score
-    
-    best_zone = max(zone_scores.items(), key=lambda x: x[1]) if zone_scores else None
-    zone_fit = best_zone[1] if best_zone else 0.5
-    
-    score = (0.3 * budget_fit + 
-             0.25 * traffic_fit + 
-             0.25 * demo_fit + 
-             0.2 * zone_fit)
-    
-    return {
-        "mall_id": mall["mall_id"],
-        "business_id": biz["business_id"],
-        "budget_fit": float(budget_fit),
-        "traffic_fit": float(traffic_fit),
-        "demo_fit": float(demo_fit),
-        "zone_fit": float(zone_fit),
-        "recommended_zone": best_zone[0] if best_zone else None,
-        "score": float(score)
     }
 
 

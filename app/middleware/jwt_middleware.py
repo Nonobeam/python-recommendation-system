@@ -1,14 +1,9 @@
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
-import sys
-from pathlib import Path
 
-app_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(app_dir))
-
-from service.jwt_service import jwt_service
-from utils.logger import get_app_logger
+from app.service.jwt_service import jwt_service
+from app.utils.logger import get_app_logger
 
 logger = get_app_logger("auth_middleware")
 

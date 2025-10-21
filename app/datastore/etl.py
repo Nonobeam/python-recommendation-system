@@ -1,15 +1,10 @@
 import pandas as pd
-import sys
-from pathlib import Path
 
-app_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(app_dir))
-
-from config.db import SessionLocal
-from model.models import Mall, Business
-from exception import DemographicDataError, BusinessDataError
-from utils.logger import etl_logger
-from datastore.cache_manager import (
+from app.config.db import SessionLocal
+from app.model.models import Mall, Business
+from app.exception import DemographicDataError, BusinessDataError
+from app.utils.logger import etl_logger
+from app.datastore.cache_manager import (
     get_cached_mall_demographic,
     get_cached_business_data,
     clear_data_cache, 

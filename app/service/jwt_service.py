@@ -1,14 +1,9 @@
 import jwt
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
-import sys
-from pathlib import Path
 
-app_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(app_dir))
-
-from config.jwt_config import jwt_config
-from utils.logger import get_app_logger
+from app.config.jwt_config import jwt_config
+from app.utils.logger import get_app_logger
 
 logger = get_app_logger("jwt")
 
@@ -61,10 +56,10 @@ class JWTService:
             
         except jwt.InvalidSignatureError as e:
             logger.error(f"Invalid JWT signature: {str(e)}")
-        except jwt.InvalidTokenError as e:
-            logger.error(f"Invalid JWT token: {str(e)}")
         except jwt.ExpiredSignatureError as e:
             logger.error(f"Expired JWT token: {str(e)}")
+        except jwt.InvalidTokenError as e:
+            logger.error(f"Invalid JWT token: {str(e)}")
         except Exception as e:
             logger.error(f"JWT validation error: {str(e)}")
             
@@ -76,7 +71,6 @@ class JWTService:
         Returns payload dict if successful, None otherwise
         """
         try:
-            # Get the algorithm from the token header
             unverified_header = jwt.get_unverified_header(token)
             token_algorithm = unverified_header.get('alg')
             
@@ -84,13 +78,11 @@ class JWTService:
                 logger.error("Token missing algorithm in header")
                 return None
                 
-            # Only allow secure algorithms
-            allowed_algorithms = ['HS256', 'HS384', 'HS512', 'RS256', 'RS384', 'RS512']
+            allowed_algorithms = ['HS512']
             if token_algorithm not in allowed_algorithms:
                 logger.error(f"Token uses unsupported algorithm: {token_algorithm}")
                 return None
             
-            # Decode without issuer validation
             payload = jwt.decode(
                 token,
                 self.config.secret,

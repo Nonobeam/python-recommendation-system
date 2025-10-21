@@ -1,54 +1,9 @@
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
-from typing import List, Dict
 
-import sys
-from pathlib import Path
-
-app_dir = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(app_dir))
-
-from service.traffic import get_top_matches, get_matches_for_mall, get_matches_for_business
-from exception.cache_exceptions import (
-    RedisConnectionError, 
-    RedisOperationError, 
-    CacheError, 
-    DemographicDataError, 
-    BusinessDataError
-)
+from app.service.traffic import get_top_matches, get_matches_for_mall, get_matches_for_business
 
 router = APIRouter()
-
-@router.get("/recommendations", response_model=List[Dict])
-async def get_recommendations(
-    limit: int = Query(default=10, ge=1, le=100, description="Number of top recommendations to return"),
-    use_cache: bool = Query(default=True, description="Whether to use cached data")
-):
-    """Get top N mall-business matches sorted by compatibility score."""
-    try:
-        recommendations = get_top_matches(limit=limit, use_cache=use_cache)
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "count": len(recommendations),
-                "recommendations": recommendations
-            }
-        )
-    except DemographicDataError as e:
-        raise HTTPException(status_code=400, detail=f"Missing demographic data: {str(e)}")
-    except BusinessDataError as e:
-        raise HTTPException(status_code=400, detail=f"Missing business data: {str(e)}")
-    except RedisConnectionError as e:
-        raise HTTPException(status_code=503, detail=f"Cache service unavailable: {str(e)}")
-    except RedisOperationError as e:
-        raise HTTPException(status_code=500, detail=f"Cache operation failed: {str(e)}")
-    except CacheError as e:
-        raise HTTPException(status_code=500, detail=f"Cache error: {str(e)}")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating recommendations: {str(e)}")
 
 @router.get("/recommendations/mall/{mall_id}")
 async def get_recommendations_for_mall(
@@ -93,20 +48,3 @@ async def get_recommendations_for_business(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating recommendations for business: {str(e)}")
-
-# @router.post("/cache/demographics")
-# async def calculate_and_cache_demographics():
-#     """Calculate and cache all demographics data."""
-#     try:
-#         from ..datastore.populate_cache import calculate_and_cache_all_demographics
-#         result = calculate_and_cache_all_demographics()
-#         return JSONResponse(
-#             status_code=200,
-#             content={
-#                 "success": True,
-#                 "message": "Demographics calculation completed",
-#                 "cached_count": result.get("cached_count", 0)
-#             }
-#         )
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Error calculating demographics: {str(e)}")

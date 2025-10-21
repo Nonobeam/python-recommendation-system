@@ -1,19 +1,15 @@
 from fastapi import APIRouter, HTTPException, Query, Depends, Header
 from fastapi.responses import JSONResponse
 from typing import Optional
-import sys
-from pathlib import Path
 
-app_dir = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(app_dir))
-
-from config.elasticsearch import ElasticsearchService, AISearchService
-from auth.token_data import get_current_user, TokenData
-from model.api_models import MallSearchResponse, ErrorResponse
-from model.search_history import save_search_history
-from model.action_type import ActionType
-from utils.logger import api_logger
-from constants import (
+from app.config.elasticsearch import ElasticsearchService, AISearchService
+from app.auth.token_data import get_current_user, TokenData
+from app.model.api_models import MallSearchResponse, ErrorResponse
+from app.model.search_history import save_search_history
+from app.model.action_type import ActionType
+from app.utils.logger import api_logger
+from app.service.input_validator import InputValidator
+from app.constants import (
     X_BR_KEY_HEADER, 
     DEFAULT_PAGE_SIZE, 
     MAX_PAGE_SIZE, 
@@ -96,11 +92,21 @@ async def search_malls(
 ):
     """Search malls using AI-powered natural language processing and Elasticsearch"""
     try:
+        is_valid, error_message = InputValidator.validate_query_message(q)
+        if not is_valid:
+            api_logger.warning(f"Invalid search query from user {current_user.user_id}: {error_message}")
+            raise HTTPException(status_code=400, detail=error_message)
+        
+        sanitized_query = InputValidator.sanitize_message(q)
+        if not sanitized_query:
+            api_logger.warning(f"Failed to sanitize query from user {current_user.user_id}")
+            raise HTTPException(status_code=400, detail="Invalid query format")
+        
         if not elasticsearch_service.test_connection():
             api_logger.error("Elasticsearch service unavailable")
             raise HTTPException(status_code=503, detail="Elasticsearch service unavailable")
         
-        results = await elasticsearch_service.search_malls_with_ai(x_br_key, q, ai_search_service, page, size)
+        results = await elasticsearch_service.search_malls_with_ai(x_br_key, sanitized_query, ai_search_service, page, size)
         
         if results["success"]:
             if is_new:
@@ -109,7 +115,7 @@ async def search_malls(
                         user_id=current_user.user_id,
                         brand_id=x_br_key,
                         action_type=ActionType.SEARCH_MALL,
-                        search_query=q,
+                        search_query=sanitized_query,
                     )
                 except Exception as e:
                     api_logger.warning(f"Failed to save search history: {str(e)}")
@@ -151,5 +157,3 @@ async def search_malls(
     except Exception as e:
         api_logger.error(f"Unexpected error in search for brand {x_br_key}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error performing AI-powered search: {str(e)}")
-
-

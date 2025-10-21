@@ -1,14 +1,9 @@
-import sys
-from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-app_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(app_dir))
-
-from config.redis import cache
-from exception.cache_exceptions import RedisOperationError, CacheError
-from utils.logger import cache_logger
+from app.config.redis import cache
+from app.exception.cache_exceptions import RedisOperationError, CacheError
+from app.utils.logger import cache_logger
 
 load_dotenv()
 

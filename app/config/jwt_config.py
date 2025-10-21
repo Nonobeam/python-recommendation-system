@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from dataclasses import dataclass
-from typing import Optional
 
 root_path = Path(__file__).parent.parent.parent
 env_path = root_path / ".env"
