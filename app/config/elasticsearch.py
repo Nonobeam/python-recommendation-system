@@ -10,6 +10,7 @@ import sys
 app_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(app_dir))
 
+from app.auth.token_data import TokenData
 from utils.logger import elasticsearch_logger
 
 root_path = Path(__file__).parent.parent.parent
@@ -109,8 +110,7 @@ class AISearchService:
         """Call Gemini API for AI processing"""
         try:
             headers = {
-                "Content-Type": "application/json",
-                "x-goog-api-key": self.api_key
+                "Content-Type": "application/json"
             }
             
             payload = {
@@ -263,8 +263,8 @@ class ElasticsearchService:
         except Exception as e:
             elasticsearch_logger.error(f"Failed to connect to Elasticsearch: {str(e)}")
             return False
-    
-    async def search_malls_with_ai(self, query: str, ai_service: AISearchService, page: int = 1, size: int = 10) -> dict:
+
+    async def search_malls_with_ai(self, brand_id: str, query: str, ai_service: AISearchService, page: int = 1, size: int = 10) -> dict:
         """Main function: Extract criteria using AI, then query Elasticsearch"""
         try:
             extraction_result = await ai_service.extract_search_criteria(query)

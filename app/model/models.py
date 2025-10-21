@@ -2,6 +2,7 @@ from sqlalchemy import TEXT, Column, String, Integer, Float, Boolean, Numeric, F
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+import uuid
 
 Base = declarative_base()
 
@@ -96,3 +97,17 @@ class BusinessHistory(Base):
     revenue = Column(Numeric)
     success = Column(Boolean)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class SearchHistory(Base):
+    __tablename__ = "search_history"
+    __table_args__ = {"schema": "platform_service"}
+    
+    search_history_id = Column(VARCHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(VARCHAR(36), nullable=False)
+    search_query = Column(Text, nullable=True)
+    brand_id = Column(VARCHAR(36), nullable=True)
+    action_type = Column(VARCHAR(100), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    
+    def __repr__(self):
+        return f"<SearchHistory(id={self.search_history_id}, user_id={self.user_id}, action={self.action_type})>"
