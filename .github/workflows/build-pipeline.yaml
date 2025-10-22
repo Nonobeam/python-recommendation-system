@@ -3,9 +3,7 @@ name: Build and Deploy Pipeline
 on:
   push:
     branches:
-      - develop
-      - staging
-      - master
+      - deploy/develop
   workflow_dispatch:
     inputs:
       environment:
