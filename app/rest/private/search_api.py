@@ -102,10 +102,6 @@ async def search_malls(
             api_logger.warning(f"Failed to sanitize query from user {current_user.user_id}")
             raise HTTPException(status_code=400, detail="Invalid query format")
         
-        if not elasticsearch_service.test_connection():
-            api_logger.error("Elasticsearch service unavailable")
-            raise HTTPException(status_code=503, detail="Elasticsearch service unavailable")
-        
         results = await elasticsearch_service.search_malls_with_ai(x_br_key, sanitized_query, ai_search_service, page, size)
         
         if results["success"]:
