@@ -3,7 +3,9 @@ name: Build and Deploy Pipeline
 on:
   push:
     branches:
-      - deploy/develop
+      - develop
+      - staging
+      - master
   workflow_dispatch:
     inputs:
       environment:
@@ -15,6 +17,10 @@ on:
           - staging
           - prd
         default: 'dev'
+
+permissions:
+  contents: write
+  packages: write
 
 env:
   BUILD_TYPE: "python"
@@ -28,6 +34,8 @@ jobs:
   tag-docker:
     runs-on: ubuntu-latest
     name: Create Git Tag for Docker Image
+    permissions:
+      contents: write
     outputs:
       new_tag: ${{ steps.tagger.outputs.new_tag }}
     steps:
