@@ -66,3 +66,4 @@ dmypy.json
 
 # AI
 .github/instructions/
+.cursor/
