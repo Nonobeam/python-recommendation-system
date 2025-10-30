@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.config.db import get_db
 from app.config.redis import cache
 from app.exception.cache_exceptions import RedisOperationError
-from app.utils.logger import api_logger
+from app.utils.logger import api_logger, log_access_message
 
 
 class DemographicRepository(ABC):
@@ -33,13 +33,32 @@ class RedisDemographicRepository(DemographicRepository):
             cache_key = self._get_cache_key(entity_id)
             cached_data = cache.get(cache_key)
             if cached_data:
-                api_logger.debug(f"Cache hit for {self.key_prefix} entity: {entity_id}")
+                log_access_message(
+                    logger=api_logger,
+                    log_level="debug",
+                    event_type="cache_hit",
+                    entity_type=self.key_prefix,
+                    entity_id=entity_id,
+                )
                 return cached_data
             else:
-                api_logger.debug(f"Cache miss for {self.key_prefix} entity: {entity_id}")
+                log_access_message(
+                    logger=api_logger,
+                    log_level="debug",
+                    event_type="cache_miss",
+                    entity_type=self.key_prefix,
+                    entity_id=entity_id,
+                )
                 return None
         except RedisOperationError as e:
-            api_logger.error(f"Redis operation error for {entity_id}: {str(e)}")
+            log_access_message(
+                logger=api_logger,
+                log_level="error",
+                event_type="redis_error",
+                entity_type=self.key_prefix,
+                entity_id=entity_id,
+                message=str(e),
+            )
             return None
 
     def get_batch(self, entity_ids: List[str]) -> Dict[str, Dict[str, Any]]:
@@ -58,15 +77,23 @@ class PostgresDemographicRepository(DemographicRepository):
     def get_by_id(self, entity_id: str) -> Optional[Dict[str, Any]]:
         db: Session = next(get_db())
         try:
+            id_column = "brand_id" if "brand" in self.table_name else "mall_id"
             query = text(
                 f"""
                 SELECT meta_data, created_at
                 FROM platform_service.{self.table_name}
-                WHERE {'brand_id' if 'brand' in self.table_name else 'mall_id'} = :entity_id
+                WHERE {id_column} = :entity_id
                 LIMIT 1
             """
             )
 
+            log_access_message(
+                logger=api_logger,
+                log_level="info",
+                event_type="db_query",
+                entity_type=self.table_name,
+                entity_id=entity_id,
+            )
             result = db.execute(query, {"entity_id": entity_id}).fetchone()
 
             if result:
@@ -74,10 +101,36 @@ class PostgresDemographicRepository(DemographicRepository):
                 if isinstance(meta_data, str):
                     meta_data = json.loads(meta_data)
 
-                return {"meta_data": meta_data, "created_at": str(result.created_at)}
+                log_access_message(
+                    logger=api_logger,
+                    log_level="info",
+                    event_type="db_found",
+                    entity_type=self.table_name,
+                    entity_id=entity_id,
+                )
+                return {
+                    "meta_data": meta_data,
+                    "created_at": str(result.created_at),
+                }
+
+            log_access_message(
+                logger=api_logger,
+                log_level="warning",
+                event_type="db_not_found",
+                entity_type=self.table_name,
+                entity_id=entity_id,
+            )
             return None
         except Exception as e:
-            api_logger.error(f"Database query error for {entity_id}: {str(e)}")
+            log_access_message(
+                logger=api_logger,
+                log_level="error",
+                event_type="db_error",
+                entity_type=self.table_name,
+                entity_id=entity_id,
+                message=str(e),
+                exc_info=True,
+            )
             return None
         finally:
             db.close()
@@ -109,15 +162,45 @@ class DemographicDataSource:
 
         if cached_data:
             self.cache_hits += 1
+            log_access_message(
+                logger=api_logger,
+                log_level="debug",
+                event_type="cache_hit",
+                entity_type="entity",
+                entity_id=entity_id,
+            )
             return cached_data
 
         self.cache_misses += 1
+        log_access_message(
+            logger=api_logger,
+            log_level="info",
+            event_type="cache_miss",
+            entity_type="entity",
+            entity_id=entity_id,
+            message="Querying database...",
+        )
         db_data = self.postgres_repo.get_by_id(entity_id)
 
         if db_data:
-            api_logger.info(f"Retrieved and cached {entity_id} from database")
+            log_access_message(
+                logger=api_logger,
+                log_level="info",
+                event_type="db_found",
+                entity_type="entity",
+                entity_id=entity_id,
+                message="Retrieved from database",
+            )
             return db_data
 
+        log_access_message(
+            logger=api_logger,
+            log_level="error",
+            event_type="not_found",
+            entity_type="entity",
+            entity_id=entity_id,
+            message="No data found in database",
+        )
         return None
 
     def get_batch(self, entity_ids: List[str]) -> Dict[str, Dict[str, Any]]:
