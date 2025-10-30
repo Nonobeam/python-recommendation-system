@@ -52,9 +52,9 @@ def get_current_user(request: Request) -> TokenData:
                 detail="Token payload extraction failed"
             )
         
-        user_id = payload.get("id")
+        user_id = payload.get("userId")
         if not user_id:
-            logger.warning("Token missing required 'id' claim")
+            logger.warning("Token missing required 'userId' claim")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token missing user identification"

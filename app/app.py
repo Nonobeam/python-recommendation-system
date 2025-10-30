@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
     app_logger.info(f"Starting server at http://0.0.0.0:{port}")
     uvicorn.run(
-        "app.rest.private.main:app",
+        "app.rest.main:app",
         host="0.0.0.0", 
         port=port,
         reload=True,
