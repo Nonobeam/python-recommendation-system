@@ -5,6 +5,7 @@ from fastapi.openapi.utils import get_openapi
 from app.rest.public.public_api import router as public_router
 from app.rest.private.business_api import router as business_router
 from app.rest.private.search_api import router as search_router
+from app.rest.private.recommendation_api import router as recommendation_router
 from app.middleware.jwt_middleware import JWTAuthMiddleware
 from app.model.api_models import HealthCheckResponse
 from app.constants import SERVICE_NAME, SERVICE_VERSION
@@ -151,3 +152,4 @@ async def health_check():
 app.include_router(public_router, prefix="/pub", tags=["Public"])
 app.include_router(business_router, prefix="/pri/api/v1", tags=["Business Logic"])
 app.include_router(search_router, prefix="/pri/api/v1", tags=["Elasticsearch Search"])
+app.include_router(recommendation_router, prefix="/pri/api/v1", tags=["Recommendation Engine"])

@@ -63,3 +63,6 @@ dmypy.json
 
 # Others
 *.log
+
+# AI
+.github/instructions/
