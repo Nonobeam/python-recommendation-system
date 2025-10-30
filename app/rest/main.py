@@ -2,18 +2,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
-from app.rest.public.public_api import router as public_router
-from app.rest.private.business_api import router as business_router
-from app.rest.private.search_api import router as search_router
-from app.rest.private.recommendation_api import router as recommendation_router
+from app.constants import SERVICE_NAME, SERVICE_VERSION
 from app.middleware.jwt_middleware import JWTAuthMiddleware
 from app.model.api_models import HealthCheckResponse
-from app.constants import SERVICE_NAME, SERVICE_VERSION
+from app.rest.private.recommendation_api import router as recommendation_router
+from app.rest.private.search_api import router as search_router
+from app.rest.public.public_api import router as public_router
+
 
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
-    
+
     openapi_schema = get_openapi(
         title="Mall-Business Recommendation API",
         version="1.0.0",
@@ -63,46 +63,35 @@ def custom_openapi():
         routes=app.routes,
         servers=[
             {"url": "http://localhost:8000", "description": "Development server"},
-            {"url": "https://api.yourdomain.com", "description": "Production server"}
-        ]
+            {"url": "https://api.yourdomain.com", "description": "Production server"},
+        ],
     )
-    
+
     openapi_schema["components"]["securitySchemes"] = {
         "BearerAuth": {
             "type": "http",
             "scheme": "bearer",
             "bearerFormat": "JWT",
-            "description": "JWT token for authentication. Include the token in the Authorization header as 'Bearer <token>'"
+            "description": "JWT token for authentication. Include the token in the Authorization header as 'Bearer <token>'",
         }
     }
-    
+
     for path, path_item in openapi_schema["paths"].items():
         if path.startswith("/pri"):
             for method in path_item:
                 if method in ["get", "post", "put", "delete", "patch"]:
                     path_item[method]["security"] = [{"BearerAuth": []}]
-    
+
     openapi_schema["tags"] = [
-        {
-            "name": "Health Check",
-            "description": "System health and status endpoints"
-        },
-        {
-            "name": "Public",
-            "description": "Public endpoints that don't require authentication"
-        },
-        {
-            "name": "Elasticsearch Search", 
-            "description": "AI-powered search endpoints with natural language processing"
-        },
-        {
-            "name": "Business Logic",
-            "description": "Business recommendation and analytics endpoints"
-        }
+        {"name": "Health Check", "description": "System health and status endpoints"},
+        {"name": "Public", "description": "Public endpoints that don't require authentication"},
+        {"name": "Elasticsearch Search", "description": "AI-powered search endpoints with natural language processing"},
+        {"name": "Business Logic", "description": "Business recommendation and analytics endpoints"},
     ]
-    
+
     app.openapi_schema = openapi_schema
     return app.openapi_schema
+
 
 app = FastAPI(
     title="Mall-Business Recommendation API",
@@ -111,14 +100,8 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
-    contact={
-        "name": "API Support",
-        "email": "support@yourdomain.com"
-    },
-    license_info={
-        "name": "MIT License",
-        "url": "https://opensource.org/licenses/MIT"
-    }
+    contact={"name": "API Support", "email": "support@yourdomain.com"},
+    license_info={"name": "MIT License", "url": "https://opensource.org/licenses/MIT"},
 )
 
 app.openapi = custom_openapi
@@ -134,11 +117,12 @@ app.add_middleware(
 
 app.add_middleware(JWTAuthMiddleware)
 
+
 @app.get("/health", response_model=HealthCheckResponse, tags=["Health Check"], summary="Service Health Check")
 async def health_check():
     """
     Check the health status of the Mall-Business Recommendation API service.
-    
+
     Returns basic service information including status, service name, and version.
     This endpoint is publicly accessible and doesn't require authentication.
     """
@@ -146,10 +130,10 @@ async def health_check():
         "status": "healthy",
         "service": SERVICE_NAME,
         "version": SERVICE_VERSION,
-        "timestamp": "2025-10-21T04:00:00Z"
+        "timestamp": "2025-10-21T04:00:00Z",
     }
 
+
 app.include_router(public_router, prefix="/pub", tags=["Public"])
-app.include_router(business_router, prefix="/pri/api/v1", tags=["Business Logic"])
 app.include_router(search_router, prefix="/pri/api/v1", tags=["Elasticsearch Search"])
 app.include_router(recommendation_router, prefix="/pri/api/v1", tags=["Recommendation Engine"])
