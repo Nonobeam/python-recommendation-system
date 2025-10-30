@@ -1,8 +1,10 @@
-from sqlalchemy import TEXT, Column, String, Integer, Float, Boolean, Numeric, ForeignKey, DateTime, Text, VARCHAR
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
 import uuid
+
+from sqlalchemy import (VARCHAR, Boolean, Column, DateTime, ForeignKey,
+                        Integer, Numeric, String, Text)
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 Base = declarative_base()
 
@@ -15,7 +17,7 @@ class Mall(Base):
     type = Column(Text)
     coordinates = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    
+
     # Relationship to mall_information
     mall_information = relationship("MallInformation", back_populates="mall", uselist=False)
 
@@ -50,30 +52,9 @@ class MallInformation(Base):
     has_escalator = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True))
-    
+
     # Relationship to mall
     mall = relationship("Mall", back_populates="mall_information")
-
-
-class Zone(Base):
-    __tablename__ = "zone"
-
-    id = Column(String, primary_key=True, index=True)
-    name = Column(Text, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-
-class Booth(Base):
-    __tablename__ = "booth"
-
-    id = Column(String, primary_key=True, index=True)
-    mall_id = Column(VARCHAR(26), ForeignKey("mall.mall_id", ondelete="CASCADE"), nullable=False, index=True)
-    size_m2 = Column(Numeric, nullable=False)
-    price = Column(Numeric, nullable=False)
-    floor_level = Column(Integer)
-    zone = Column(String(10), nullable=False)
-    is_available = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class Business(Base):
@@ -88,6 +69,7 @@ class Business(Base):
     visitor_capacity = Column(Integer)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+
 class BusinessHistory(Base):
     __tablename__ = "business_history"
 
@@ -98,16 +80,17 @@ class BusinessHistory(Base):
     success = Column(Boolean)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+
 class SearchHistory(Base):
     __tablename__ = "search_history"
     __table_args__ = {"schema": "platform_service"}
-    
+
     search_history_id = Column(VARCHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(VARCHAR(36), nullable=False)
     search_query = Column(Text, nullable=True)
     brand_id = Column(VARCHAR(36), nullable=True)
     action_type = Column(VARCHAR(100), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    
+
     def __repr__(self):
         return f"<SearchHistory(id={self.search_history_id}, user_id={self.user_id}, action={self.action_type})>"
