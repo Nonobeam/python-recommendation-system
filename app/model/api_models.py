@@ -1,6 +1,8 @@
-from typing import List, Optional
+from typing import Generic, List, Optional, TypeVar
 
 from pydantic import BaseModel, Field
+
+T = TypeVar("T")
 
 
 class PaginationInfo(BaseModel):
@@ -67,3 +69,19 @@ class HealthCheckResponse(BaseModel):
     service: str = Field(..., description="Service name", example="mall-recommendation-system")
     version: str = Field(..., description="Service version", example="1.0.0")
     timestamp: str = Field(..., description="Response timestamp", example="2025-10-21T04:00:00Z")
+
+
+class ErrorResp(BaseModel):
+    """Error response details"""
+
+    code: str = Field(..., description="Error code", example="VALIDATION_ERROR")
+    message: str = Field(..., description="Error message", example="Invalid input provided")
+    details: Optional[dict] = Field(None, description="Additional error details", example=None)
+
+
+class ApiResp(BaseModel, Generic[T]):
+    """Standardized API response structure"""
+
+    success: bool = Field(..., description="Whether the request was successful", example=True)
+    data: Optional[T] = Field(None, description="Response data when successful")
+    error: Optional[ErrorResp] = Field(None, description="Error information when failed")
