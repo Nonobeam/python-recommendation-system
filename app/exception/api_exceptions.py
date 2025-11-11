@@ -1,3 +1,15 @@
+from app.model.error_code import ErrorCode
+
+
+class ApplicationException(Exception):
+    """Base application exception with error code support"""
+
+    def __init__(self, error_code: ErrorCode, *args):
+        self.error_code = error_code
+        self.args = args
+        super().__init__(str(error_code))
+
+
 class APIError(Exception):
     """Base exception for API-related errors"""
 

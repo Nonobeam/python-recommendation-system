@@ -61,6 +61,29 @@ class RedisDemographicRepository(DemographicRepository):
             )
             return None
 
+    def set(self, entity_id: str, data: Dict[str, Any], ttl: int = 3600) -> bool:
+        try:
+            cache_key = self._get_cache_key(entity_id)
+            cache.set(cache_key, data, expire=ttl)
+            log_access_message(
+                logger=api_logger,
+                log_level="debug",
+                event_type="cache_set",
+                entity_type=self.key_prefix,
+                entity_id=entity_id,
+            )
+            return True
+        except RedisOperationError as e:
+            log_access_message(
+                logger=api_logger,
+                log_level="error",
+                event_type="redis_error",
+                entity_type=self.key_prefix,
+                entity_id=entity_id,
+                message=f"Failed to cache data: {str(e)}",
+            )
+            return False
+
     def get_batch(self, entity_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         results = {}
         for entity_id in entity_ids:
@@ -191,6 +214,7 @@ class DemographicDataSource:
                 entity_id=entity_id,
                 message="Retrieved from database",
             )
+            self.redis_repo.set(entity_id, db_data, ttl=self.cache_ttl)
             return db_data
 
         log_access_message(
