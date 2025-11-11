@@ -16,12 +16,16 @@ class BoothRecommendationRequest(BaseModel):
 
 
 class BoothRecommendationItem(BaseModel):
+    booth_id: Optional[str] = Field(None, description="Booth identifier")
+    booth_name: Optional[str] = Field(None, description="Booth name")
+    booth_size: Optional[float] = Field(None, description="Booth frontage width in meters")
+    booth_price: Optional[float] = Field(None, description="Current booth rental price")
+    booth_image: Optional[str] = Field(None, description="Primary booth image URL")
+    floor_level: Optional[int] = Field(None, description="Floor level of the booth")
     mall_id: str = Field(..., description="Mall identifier")
     mall_name: Optional[str] = Field(None, description="Mall name")
     mall_logo: Optional[str] = Field(None, description="Mall logo URL")
     mall_address: Optional[str] = Field(None, description="Mall address")
-    size_m2: Optional[float] = Field(None, description="Booth size in square meters")
-    rent_price: Optional[float] = Field(None, description="Current rental price")
 
 
 class BoothRecommendationResponse(BaseModel):

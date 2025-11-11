@@ -89,12 +89,16 @@ class BoothRecommendationService:
                 result = scorer.compute_final_score()
 
                 scored_booth = {
+                    "booth_id": booth.get("booth_id"),
+                    "booth_name": booth.get("booth_name") or booth_for_scoring.get("name"),
+                    "booth_size": booth.get("frontage_width_m") or booth_for_scoring.get("frontage_width_m"),
+                    "booth_price": booth.get("rent_price") or booth_for_scoring.get("rent_price"),
+                    "booth_image": booth.get("booth_image") or booth_for_scoring.get("booth_image"),
+                    "floor_level": booth.get("floor_level") or booth_for_scoring.get("floor_level"),
                     "mall_id": mall_id,
                     "mall_name": booth.get("mall_name"),
-                    "mall_logo": booth.get("mall_logo"),
-                    "mall_address": booth.get("mall_address"),
-                    "size_m2": booth.get("size_m2"),
-                    "rent_price": booth.get("rent_price"),
+                    "mall_logo": booth.get("mall_logo") or booth_for_scoring.get("mall_logo"),
+                    "mall_address": booth.get("mall_address") or booth_for_scoring.get("mall_address"),
                     "_composite_score": result.get("composite_score", 0),
                 }
                 scored_booths.append(scored_booth)
@@ -178,12 +182,16 @@ class BoothRecommendationService:
                 result = scorer.compute_final_score()
 
                 scored_booth = {
+                    "booth_id": booth.get("booth_id"),
+                    "booth_name": booth.get("booth_name") or booth_for_scoring.get("name"),
+                    "booth_size": booth.get("frontage_width_m") or booth_for_scoring.get("frontage_width_m"),
+                    "booth_price": booth.get("rent_price") or booth_for_scoring.get("rent_price"),
+                    "booth_image": booth.get("booth_image") or booth_for_scoring.get("booth_image"),
+                    "floor_level": booth.get("floor_level") or booth_for_scoring.get("floor_level"),
                     "mall_id": mall_id,
                     "mall_name": booth.get("mall_name"),
-                    "mall_logo": booth.get("mall_logo"),
-                    "mall_address": booth.get("mall_address"),
-                    "size_m2": booth.get("size_m2"),
-                    "rent_price": booth.get("rent_price"),
+                    "mall_logo": booth.get("mall_logo") or booth_for_scoring.get("mall_logo"),
+                    "mall_address": booth.get("mall_address") or booth_for_scoring.get("mall_address"),
                     "_composite_score": result.get("composite_score", 0),
                 }
                 scored_booths.append(scored_booth)
