@@ -24,7 +24,7 @@ MIN_SEARCH_HISTORY_LIMIT = 1
 
 # Cache Constants
 CACHE_EXPIRY_SECONDS = 3600  # 1 hour
-DEFAULT_CACHE_TTL = 86400    # 24 hours
+DEFAULT_CACHE_TTL = 86400  # 24 hours
 
 # Database Constants
 DEFAULT_DB_TIMEOUT = 30
@@ -40,7 +40,7 @@ ERROR_STATUS = False
 
 # HTTP Status Messages
 HTTP_401_MESSAGE = "Authentication required"
-HTTP_403_MESSAGE = "Access forbidden" 
+HTTP_403_MESSAGE = "Access forbidden"
 HTTP_404_MESSAGE = "Resource not found"
 HTTP_500_MESSAGE = "Internal server error"
 HTTP_503_MESSAGE = "Service unavailable"

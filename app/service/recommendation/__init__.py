@@ -1,3 +1,7 @@
+from .booth_filter_extractor import BoothFilterExtractor
+from .booth_recommendation_service import BoothRecommendationService
+from .booth_repository import BoothRepository, BoothRepositoryInstance
+from .booth_scorer import BoothScorer
 from .repositories import (BrandDemographicDataSource, DemographicDataSource,
                            DemographicRepository, MallDemographicDataSource,
                            PostgresDemographicRepository,
@@ -15,4 +19,9 @@ __all__ = [
     "RecommendationService",
     "SingleMatchService",
     "BatchMatchService",
+    "BoothRepository",
+    "BoothRepositoryInstance",
+    "BoothScorer",
+    "BoothRecommendationService",
+    "BoothFilterExtractor",
 ]

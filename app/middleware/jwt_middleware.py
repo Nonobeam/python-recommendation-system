@@ -51,9 +51,10 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
 
             logger.debug(f"Received token (first 20 chars): {token[:20]}...")
 
-            if not jwt_service.validate_token(token):
-                logger.warning(f"Invalid JWT token for path: {path}")
-                return error(ErrorCode.AUTHENTICATION_ERROR, "JWT token is invalid or expired")
+            is_valid, error_message = jwt_service.validate_token(token)
+            if not is_valid:
+                logger.warning(f"Invalid JWT token for path: {path}, reason: {error_message}")
+                return error(ErrorCode.AUTHENTICATION_ERROR, error_message or "JWT token is invalid or expired")
 
             payload = jwt_service.get_token_payload(token)
             if payload:

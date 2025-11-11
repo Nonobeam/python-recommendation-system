@@ -71,12 +71,19 @@ class HealthCheckResponse(BaseModel):
     timestamp: str = Field(..., description="Response timestamp", example="2025-10-21T04:00:00Z")
 
 
+class FieldError(BaseModel):
+    """Field-level validation error"""
+
+    field: str = Field(..., description="Field name with error", example="email")
+    message: str = Field(..., description="Error message for this field", example="Email is required")
+
+
 class ErrorResp(BaseModel):
     """Error response details"""
 
-    code: str = Field(..., description="Error code", example="VALIDATION_ERROR")
+    code: str = Field(..., description="Error code", example="E_101_400_001")
     message: str = Field(..., description="Error message", example="Invalid input provided")
-    details: Optional[dict] = Field(None, description="Additional error details", example=None)
+    details: Optional[List[FieldError]] = Field(None, description="Field-level validation errors", example=None)
 
 
 class ApiResp(BaseModel, Generic[T]):

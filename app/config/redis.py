@@ -1,9 +1,10 @@
+import json
+import os
+from pathlib import Path
+from typing import Any, Optional
+
 import redis
 from dotenv import load_dotenv
-import os
-import json
-from typing import Optional, Any
-from pathlib import Path
 
 from app.exception import RedisConnectionError, RedisOperationError
 from app.utils.logger import redis_logger
@@ -24,19 +25,20 @@ redis_pool = redis.ConnectionPool(
     db=REDIS_DB,
     password=REDIS_PASSWORD,
     decode_responses=REDIS_DECODE_RESPONSES,
-    max_connections=20
+    max_connections=20,
 )
 
 redis_logger.info(f"Connecting to Redis at redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
 
 redis_client = redis.Redis(connection_pool=redis_pool)
 
+
 class RedisCache:
     """Redis cache utility class"""
-    
+
     def __init__(self, client: redis.Redis = redis_client):
         self.client = client
-    
+
     def get(self, key: str) -> Optional[Any]:
         try:
             value = self.client.get(key)
@@ -47,7 +49,7 @@ class RedisCache:
             raise RedisOperationError("get", key, str(e))
         except json.JSONDecodeError as e:
             raise RedisOperationError("get", key, f"JSON decode error: {str(e)}")
-    
+
     def set(self, key: str, value: Any, expire: int = 3600) -> bool:
         try:
             json_value = json.dumps(value, default=str)
@@ -56,24 +58,25 @@ class RedisCache:
             raise RedisOperationError("set", key, str(e))
         except json.JSONEncodeError as e:
             raise RedisOperationError("set", key, f"JSON encode error: {str(e)}")
-    
+
     def delete(self, key: str) -> bool:
         try:
             return self.client.delete(key) > 0
         except redis.RedisError as e:
             raise RedisOperationError("delete", key, str(e))
-    
+
     def exists(self, key: str) -> bool:
         try:
             return self.client.exists(key) > 0
         except redis.RedisError as e:
             raise RedisOperationError("exists", key, str(e))
-    
+
     def flush_all(self) -> bool:
         try:
             return self.client.flushdb()
         except redis.RedisError as e:
             raise RedisOperationError("flush_all", message=str(e))
+
 
 def startup_redis_check() -> bool:
     try:
@@ -83,6 +86,7 @@ def startup_redis_check() -> bool:
     except redis.RedisError as e:
         redis_logger.error(f"Redis connection failed: {str(e)}")
         raise RedisConnectionError(f"Redis connection failed: {str(e)}")
+
 
 cache = RedisCache()
 

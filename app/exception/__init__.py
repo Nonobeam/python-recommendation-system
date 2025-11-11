@@ -1,4 +1,5 @@
-from .api_exceptions import (APIError, AuthenticationError, NotFoundError,
+from .api_exceptions import (APIError, ApplicationException,
+                             AuthenticationError, NotFoundError,
                              ValidationError)
 from .cache_exceptions import (BusinessDataError, CacheError,
                                DemographicDataError, RedisConnectionError,
@@ -24,6 +25,7 @@ __all__ = [
     "MCPServerError",
     "MCPValidationError",
     "GeminiAPIError",
+    "ApplicationException",
     "APIError",
     "ValidationError",
     "AuthenticationError",

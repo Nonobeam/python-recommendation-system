@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
 from app.constants import SERVICE_NAME, SERVICE_VERSION
+from app.exception.api_exceptions import ApplicationException
 from app.middleware.jwt_middleware import JWTAuthMiddleware
 from app.model.api_models import HealthCheckResponse
 from app.model.error_code import ErrorCode
@@ -129,6 +130,12 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     elif exc.status_code == 503:
         error_code = ErrorCode.SERVICE_UNAVAILABLE
     return error(error_code, exc.detail or str(exc))
+
+
+@app.exception_handler(ApplicationException)
+async def application_exception_handler(request: Request, exc: ApplicationException):
+    message = str(exc.args[0]) if exc.args else str(exc.error_code)
+    return error(exc.error_code, message)
 
 
 @app.exception_handler(Exception)
