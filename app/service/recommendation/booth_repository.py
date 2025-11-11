@@ -31,18 +31,30 @@ class BoothRepository:
                 f"""
                 SELECT
                     b.booth_id,
+                    b.name as booth_name,
                     b.mall_id,
                     b.size_m2,
                     brp.rent_price,
                     m.name as mall_name,
                     m.logo as mall_logo,
-                    m.address as mall_address
+                    m.address as mall_address,
+                    f.level as floor_level,
+                    bi.frontage_width_m as frontage_width_m,
+                    asset.file_url as booth_image
                 FROM platform_service.booth b
                 LEFT JOIN platform_service.booth_rental_price brp
                     ON b.booth_id = brp.booth_id AND brp.is_current = true
                 LEFT JOIN platform_service.zone z ON b.zone_id = z.zone_id
                 LEFT JOIN platform_service.floor f ON b.floor_id = f.floor_id
+                LEFT JOIN platform_service.booth_information bi ON b.booth_id = bi.booth_id
                 LEFT JOIN platform_service.mall m ON b.mall_id = m.mall_id
+                LEFT JOIN LATERAL (
+                    SELECT bva.file_url
+                    FROM platform_service.booth_visual_assets bva
+                    WHERE bva.booth_id = b.booth_id
+                    ORDER BY bva.display_order ASC NULLS LAST
+                    LIMIT 1
+                ) asset ON TRUE
                 WHERE b.is_available = true
                     AND b.mall_id IN ({placeholders})
             """
@@ -92,12 +104,16 @@ class BoothRepository:
             for row in results:
                 booth = {
                     "booth_id": row.booth_id,
+                    "booth_name": row.booth_name,
                     "mall_id": row.mall_id,
                     "size_m2": float(row.size_m2) if row.size_m2 else None,
                     "rent_price": float(row.rent_price) if row.rent_price else None,
                     "mall_name": row.mall_name,
                     "mall_logo": row.mall_logo,
                     "mall_address": row.mall_address,
+                    "floor_level": row.floor_level,
+                    "frontage_width_m": float(row.frontage_width_m) if row.frontage_width_m else None,
+                    "booth_image": row.booth_image,
                 }
                 booths.append(booth)
 
