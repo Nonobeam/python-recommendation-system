@@ -1,4 +1,6 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+from .scoring_utils import is_valid_number, safe_get_number
 
 
 class BoothScorer:
@@ -7,21 +9,29 @@ class BoothScorer:
         self.booth = booth
         self.mall_score = mall_score
 
-    def score_financial(self) -> Tuple[int, List[str]]:
+    def score_financial(self) -> Tuple[Optional[int], List[str]]:
         explanations = []
         fp = self.brand.get("financial_performance", {})
         fc = self.brand.get("financial_capacity", {})
         op = self.brand.get("operational_profile", {})
 
-        max_aff_rent = fc.get("max_affordable_rent", 0)
-        comfort_range = fc.get("comfortable_rent_range", [0, 0])
-        income_stability = fp.get("income_stability_score", 0)
-        space_required = op.get("space_requirement_m2", 0)
+        max_aff_rent = safe_get_number(fc, "max_affordable_rent")
+        comfort_range = fc.get("comfortable_rent_range")
+        income_stability = safe_get_number(fp, "income_stability_score")
+        space_required = safe_get_number(op, "space_requirement_m2")
 
-        booth_price = self.booth.get("rent_price")
+        if comfort_range is None or not isinstance(comfort_range, list) or len(comfort_range) < 2:
+            comfort_range = [None, None]
+        else:
+            comfort_range = [
+                safe_get_number({"val": comfort_range[0]}, "val") if len(comfort_range) > 0 else None,
+                safe_get_number({"val": comfort_range[1]}, "val") if len(comfort_range) > 1 else None,
+            ]
+
+        booth_price = safe_get_number(self.booth, "rent_price")
         if booth_price is None:
-            booth_size = self.booth.get("size_m2", 0)
-            if booth_size > 0 and space_required > 0:
+            booth_size = safe_get_number(self.booth, "size_m2")
+            if booth_size is not None and space_required is not None and booth_size > 0 and space_required > 0:
                 estimated_price_per_sqm = 1000000
                 booth_price = booth_size * estimated_price_per_sqm
                 explanations.append(f"No booth price available. Using estimated price based on size: {booth_price}")
@@ -29,31 +39,56 @@ class BoothScorer:
                 explanations.append(
                     "No booth price available and cannot estimate. Financial scoring may be inaccurate."
                 )
-                booth_price = 0
+                if booth_price is None:
+                    return None, explanations
 
         explanations.append(f"Booth rent price: {booth_price}")
 
-        if booth_price <= comfort_range[0]:
-            score = 30
-            explanations.append("Rent is well within comfortable budget range.")
-        elif booth_price <= comfort_range[1]:
-            score = 25
-            explanations.append("Rent is within upper comfortable range.")
-        elif booth_price <= max_aff_rent:
-            score = 15
-            explanations.append("Rent is affordable but tight.")
-        else:
-            score = 5
-            explanations.append("Rent is above the maximum affordable (over budget).")
+        score = 0
+        has_valid_comparison = False
 
-        if income_stability >= 8:
-            score += 5
-            explanations.append("High income stability. Bonus points added.")
-        elif income_stability >= 6:
-            score += 3
-            explanations.append("Moderate income stability. Some bonus points added.")
+        if comfort_range[0] is not None and comfort_range[1] is not None:
+            has_valid_comparison = True
+            if booth_price <= comfort_range[0]:
+                score = 30
+                explanations.append("Rent is well within comfortable budget range.")
+            elif booth_price <= comfort_range[1]:
+                score = 25
+                explanations.append("Rent is within upper comfortable range.")
+            elif max_aff_rent is not None and booth_price <= max_aff_rent:
+                score = 15
+                explanations.append("Rent is affordable but tight.")
+            elif max_aff_rent is not None:
+                score = 5
+                explanations.append("Rent is above the maximum affordable (over budget).")
+            else:
+                score = 10
+                explanations.append("Rent calculated but max_affordable_rent missing. Partial score.")
+        elif max_aff_rent is not None:
+            has_valid_comparison = True
+            if booth_price <= max_aff_rent:
+                score = 20
+                explanations.append("Rent is within affordable range (comfortable range missing).")
+            else:
+                score = 5
+                explanations.append("Rent is above the maximum affordable (over budget).")
         else:
-            explanations.append("Low income stability. No stability bonus.")
+            explanations.append("Cannot compare rent: max_affordable_rent and comfortable_rent_range are missing.")
+
+        if not has_valid_comparison:
+            return None, explanations
+
+        if income_stability is not None:
+            if income_stability >= 8:
+                score += 5
+                explanations.append("High income stability. Bonus points added.")
+            elif income_stability >= 6:
+                score += 3
+                explanations.append("Moderate income stability. Some bonus points added.")
+            else:
+                explanations.append("Low income stability. No stability bonus.")
+        else:
+            explanations.append("Income stability score missing. No stability bonus.")
 
         return min(score, 35), explanations
 
@@ -115,17 +150,19 @@ class BoothScorer:
 
         return min(score, 25), explanations
 
-    def score_physical(self) -> Tuple[int, List[str]]:
+    def score_physical(self) -> Tuple[Optional[int], List[str]]:
         explanations = []
         op = self.brand.get("operational_profile", {})
         req = self.brand.get("requirements", {})
 
-        space_required = op.get("space_requirement_m2", 0)
-        booth_size = self.booth.get("size_m2")
+        space_required = safe_get_number(op, "space_requirement_m2")
+        booth_size = safe_get_number(self.booth, "size_m2")
 
         score = 0
+        has_valid_score = False
 
-        if space_required > 0 and booth_size:
+        if space_required is not None and booth_size is not None and space_required > 0:
+            has_valid_score = True
             size_diff = abs(booth_size - space_required) / space_required
             if size_diff <= 0.1:
                 score += 15
@@ -142,11 +179,13 @@ class BoothScorer:
                 )
         else:
             score += 5
+            has_valid_score = True
             explanations.append("Size requirement not specified or booth size unknown.")
 
-        frontage_pref = req.get("preferred_frontage_width")
-        booth_frontage = self.booth.get("frontage_width_m")
-        if frontage_pref and booth_frontage:
+        frontage_pref = safe_get_number(req, "preferred_frontage_width")
+        booth_frontage = safe_get_number(self.booth, "frontage_width_m")
+        if frontage_pref is not None and booth_frontage is not None:
+            has_valid_score = True
             if booth_frontage >= frontage_pref:
                 score += 5
                 explanations.append(f"Frontage width {booth_frontage}m meets or exceeds preference {frontage_pref}m.")
@@ -156,9 +195,10 @@ class BoothScorer:
         else:
             explanations.append("No frontage preference or booth frontage unknown.")
 
-        ceiling_pref = req.get("preferred_ceiling_height")
-        booth_ceiling = self.booth.get("ceiling_height_m")
-        if ceiling_pref and booth_ceiling:
+        ceiling_pref = safe_get_number(req, "preferred_ceiling_height")
+        booth_ceiling = safe_get_number(self.booth, "ceiling_height_m")
+        if ceiling_pref is not None and booth_ceiling is not None:
+            has_valid_score = True
             if booth_ceiling >= ceiling_pref:
                 score += 3
                 explanations.append(f"Ceiling height {booth_ceiling}m meets or exceeds preference {ceiling_pref}m.")
@@ -171,6 +211,7 @@ class BoothScorer:
         shape_pref = req.get("preferred_shape")
         booth_shape = self.booth.get("shape")
         if shape_pref and booth_shape:
+            has_valid_score = True
             if booth_shape.lower() == shape_pref.lower():
                 score += 2
                 explanations.append(f"Booth shape {booth_shape} matches preference.")
@@ -179,10 +220,16 @@ class BoothScorer:
         else:
             explanations.append("No shape preference or booth shape unknown.")
 
+        if not has_valid_score:
+            return None, explanations
+
         return min(score, 25), explanations
 
-    def score_mall_inheritance(self) -> Tuple[int, List[str]]:
+    def score_mall_inheritance(self) -> Tuple[Optional[int], List[str]]:
         explanations = []
+        if not is_valid_number(self.mall_score):
+            explanations.append("Mall score is invalid (None or NaN). No inheritance score.")
+            return None, explanations
         mall_score_normalized = (self.mall_score / 100.0) * 15
         score = int(mall_score_normalized)
         explanations.append(f"Inherited {score} points from mall compatibility score ({self.mall_score:.2f}).")
@@ -192,35 +239,70 @@ class BoothScorer:
         comp_scores = {}
         explanations = {}
         total = 0
+        valid_components = 0
+        max_possible_score = 0
 
         comp, expl = self.score_financial()
         comp_scores["financial"] = comp
         explanations["financial"] = expl
-        total += comp
+        if comp is not None:
+            total += comp
+            valid_components += 1
+            max_possible_score += 35
 
         comp, expl = self.score_location()
         comp_scores["location"] = comp
         explanations["location"] = expl
-        total += comp
+        if comp is not None:
+            total += comp
+            valid_components += 1
+            max_possible_score += 25
 
         comp, expl = self.score_physical()
         comp_scores["physical"] = comp
         explanations["physical"] = expl
-        total += comp
+        if comp is not None:
+            total += comp
+            valid_components += 1
+            max_possible_score += 25
 
         comp, expl = self.score_mall_inheritance()
         comp_scores["mall_inheritance"] = comp
         explanations["mall_inheritance"] = expl
-        total += comp
+        if comp is not None:
+            total += comp
+            valid_components += 1
+            max_possible_score += 15
 
-        booth_score = (total / 100) * 100
+        if valid_components == 0:
+            return {
+                "booth_score": float("nan"),
+                "mall_score": round(self.mall_score, 2) if is_valid_number(self.mall_score) else float("nan"),
+                "composite_score": float("nan"),
+                "component_scores": comp_scores,
+                "explanations": explanations,
+            }
 
-        composite_score = (self.mall_score * 0.4) + (booth_score * 0.6)
+        if max_possible_score == 0:
+            return {
+                "booth_score": float("nan"),
+                "mall_score": round(self.mall_score, 2) if is_valid_number(self.mall_score) else float("nan"),
+                "composite_score": float("nan"),
+                "component_scores": comp_scores,
+                "explanations": explanations,
+            }
+
+        booth_score = (total / max_possible_score) * 100
+
+        if not is_valid_number(self.mall_score):
+            composite_score = float("nan")
+        else:
+            composite_score = (self.mall_score * 0.4) + (booth_score * 0.6)
 
         return {
             "booth_score": round(booth_score, 2),
-            "mall_score": round(self.mall_score, 2),
-            "composite_score": round(composite_score, 2),
+            "mall_score": round(self.mall_score, 2) if is_valid_number(self.mall_score) else float("nan"),
+            "composite_score": round(composite_score, 2) if is_valid_number(composite_score) else float("nan"),
             "component_scores": comp_scores,
             "explanations": explanations,
         }
