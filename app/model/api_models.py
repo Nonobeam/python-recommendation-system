@@ -21,6 +21,12 @@ class MallSearchResult(BaseModel):
     mall_id: str = Field(..., description="Unique mall identifier", example="mall_123")
     mall_name: str = Field(..., description="Name of the mall", example="Premium Shopping Center")
     mall_type: Optional[str] = Field(None, description="Type of mall (Premium, Standard, Budget)", example="Premium")
+    mall_logo: Optional[str] = Field(
+        None, description="Mall logo URL", example="https://cdn.example.com/malls/premium/logo.png"
+    )
+    mall_address: Optional[str] = Field(
+        None, description="Mall address", example="123 Nguyen Hue, District 1, Ho Chi Minh City"
+    )
     district: Optional[str] = Field(None, description="District location", example="District 1")
     rent_price_usd: Optional[float] = Field(None, description="Rental price in USD", example=1200.0)
     management_fee_usd: Optional[float] = Field(None, description="Management fee in USD", example=150.0)
