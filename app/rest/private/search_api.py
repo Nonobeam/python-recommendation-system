@@ -51,8 +51,8 @@ async def search_malls(
         description="Natural language search query for malls",
         example="Find premium malls with parking and elevator access",
     ),
-    page: int = Query(default=1, ge=MIN_PAGE_SIZE, description="Page number for pagination (starts from 1)", example=1),
-    size: int = Query(
+    pageNumber: int = Query(default=1, ge=1, description="Page number for pagination (starts from 1)", example=1),
+    pageSize: int = Query(
         default=DEFAULT_PAGE_SIZE,
         ge=MIN_PAGE_SIZE,
         le=MAX_PAGE_SIZE,
@@ -81,7 +81,7 @@ async def search_malls(
             return error(ErrorCode.VALIDATION_ERROR, "Invalid query format")
 
         results = await elasticsearch_service.search_malls_with_ai(
-            x_br_key, sanitized_query, ai_search_service, page, size
+            x_br_key, sanitized_query, ai_search_service, pageNumber, pageSize
         )
 
         if results["success"]:
@@ -92,6 +92,14 @@ async def search_malls(
                 enriched_mall["mall_logo"] = mall.get("mall_logo") or mall.get("logo")
                 enriched_mall["mall_address"] = mall.get("mall_address") or mall.get("address")
                 formatted_results.append(enriched_mall)
+
+            pagination_info = results.get("pagination") or {
+                "pageNumber": results.get("page", pageNumber),
+                "pageSize": results.get("size", pageSize),
+                "totalResults": results["total_found"],
+                "totalPages": (results["total_found"] + pageSize - 1) // pageSize,
+                "hasMore": results.get("has_more", False),
+            }
 
             if is_new:
                 try:
@@ -106,13 +114,7 @@ async def search_malls(
 
             response_data = {
                 "extracted_criteria": results["extracted_criteria"],
-                "pagination": {
-                    "current_page": results.get("page", page),
-                    "page_size": results.get("size", size),
-                    "total_results": results["total_found"],
-                    "total_pages": (results["total_found"] + size - 1) // size,
-                    "has_more": results.get("has_more", False),
-                },
+                "pagination": pagination_info,
                 "results": formatted_results,
             }
             return success(response_data)

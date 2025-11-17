@@ -62,6 +62,13 @@ class AISearchService:
             You are a search criteria extraction assistant for a mall database system.
             Extract search parameters from natural language queries and return them as structured JSON.
 
+            Always normalize and convert user queries into a canonical search form before returning.
+            Vietnamese addresses generally follow this structure: number + street + ward (optional) + district + city.
+            Extract these parts whenever possible, and keep them in Vietnamese without translating to English.
+            For example, convert "Ở quận 10 trên đường Nguyễn Huệ" into structured fields like
+            {"street": "đường Nguyễn Huệ", "district": "quận 10", "city": "Thành phố Hồ Chí Minh"}.
+            Do not simply echo back the raw user text when building the criteria, but preserve the language.
+
             Available mall fields:
             - mall_name (string): Mall name
             - mall_type (string): Mall type (Premium, Standard, Outlet, etc.)
@@ -89,7 +96,10 @@ class AISearchService:
             - contact_email (string): Contact email
             - website (string): Website URL
 
-            Return ONLY a JSON object with extracted criteria. Use these structures:
+            Return ONLY a JSON object with extracted criteria. Always include a "general_search"
+            field that contains the normalized search text you want Elasticsearch to use (not the
+            original raw query), and add any structured fields you can extract. Always keep
+            general_search in Vietnamese if the user queried in Vietnamese. Use these structures:
             - For text fields: {"field_name": "search_value"}
             - For numeric ranges: {"field_name": {"min": value, "max": value}} or {"field_name": {"gte": value}} or {"field_name": {"lte": value}}
             - For exact numeric matches: {"field_name": exact_value}
@@ -97,11 +107,29 @@ class AISearchService:
             - For multiple text options: {"field_name": ["option1", "option2"]}
 
             Example responses:
-            {"mall_name": "central", "avg_daily_visitors": {"gte": 5000}, "has_elevator": true}
-            {"mall_type": ["Premium", "Standard"], "management_fee_usd": {"max": 1000}}
-            {"opening_year": {"gte": 2010}, "number_of_floors": {"min": 3}}
+            {
+              "general_search": "các trung tâm thương mại cao cấp ở quận 1",
+              "district": "quận 1",
+              "mall_name": "central",
+              "avg_daily_visitors": {"gte": 5000},
+              "has_elevator": true
+            }
+            {
+              "general_search": "trung tâm thương mại trên đường Nguyễn Huệ",
+              "street": "đường Nguyễn Huệ",
+              "mall_type": ["Premium", "Standard"],
+              "management_fee_usd": {"max": 1000}
+            }
+            {
+              "general_search": "trung tâm mua sắm hiện đại mở sau năm 2010",
+              "city": "Thành phố Hồ Chí Minh",
+              "opening_year": {"gte": 2010},
+              "number_of_floors": {"min": 3}
+            }
 
-            If no specific criteria can be extracted, return: {"general_search": "original_query"}
+            If no specific structured criteria can be extracted, still return a JSON object
+            with a single field "general_search" whose value is your normalized internal
+            search phrase, not the exact original query text from the user.
             """
 
     async def _call_gemini_api(self, system_prompt: str, user_message: str) -> Dict[str, Any]:
@@ -181,6 +209,11 @@ class AISearchService:
             "contact_phone",
             "contact_email",
             "website",
+            "street",
+            "district",
+            "ward",
+            "city",
+            "address",
             "general_search",
         }
 
@@ -292,14 +325,23 @@ class ElasticsearchService:
             criteria = extraction_result["criteria"]
 
             search_result = self.search_malls_with_ai_criteria(criteria, page, size)
+            total_found = search_result.get("total", 0)
+            pagination = {
+                "pageNumber": search_result.get("page", page),
+                "pageSize": search_result.get("size", size),
+                "totalResults": total_found,
+                "totalPages": (total_found + size - 1) // size if size else 0,
+                "hasMore": search_result.get("has_more", False),
+            }
 
             return {
                 "success": search_result["success"],
                 "original_query": query,
                 "extracted_criteria": criteria,
-                "total_found": search_result.get("total", 0),
+                "total_found": total_found,
                 "page": page,
                 "size": size,
+                "pagination": pagination,
                 "results": search_result.get("results", []),
                 "error": search_result.get("error"),
             }
@@ -363,6 +405,38 @@ class ElasticsearchService:
             if field == "general_search":
                 continue
 
+            if field in {"street", "district", "ward", "city", "address"}:
+                mapped_field = "mall_address"
+                if isinstance(value, str):
+                    query_parts.append(
+                        {
+                            "match": {
+                                mapped_field: {
+                                    "query": value,
+                                    "operator": "and",
+                                    "fuzziness": "AUTO",
+                                }
+                            }
+                        }
+                    )
+                elif isinstance(value, list):
+                    sub_queries = []
+                    for item in value:
+                        sub_queries.append(
+                            {
+                                "match": {
+                                    mapped_field: {
+                                        "query": item,
+                                        "operator": "and",
+                                        "fuzziness": "AUTO",
+                                    }
+                                }
+                            }
+                        )
+                    if sub_queries:
+                        query_parts.append({"bool": {"should": sub_queries, "minimum_should_match": 1}})
+                continue
+
             if isinstance(value, str):
                 if field in ["mall_name", "mall_type"]:
                     query_parts.append({"multi_match": {"query": value, "fields": [field], "fuzziness": "AUTO"}})
@@ -411,6 +485,7 @@ class ElasticsearchService:
                 "query": query,
                 "fields": [
                     "mall_name^3",
+                    "mall_address^3",
                     "mall_type^2",
                     "electricity_policy",
                     "overtime_fee_policy",
