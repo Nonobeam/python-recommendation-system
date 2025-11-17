@@ -4,8 +4,7 @@ from fastapi import APIRouter, Depends, Header, Query
 
 from app.auth.token_data import TokenData, get_current_user
 from app.config.elasticsearch import AISearchService, ElasticsearchService
-from app.constants import (DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MIN_PAGE_SIZE,
-                           X_BR_KEY_HEADER)
+from app.constants import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MIN_PAGE_SIZE, X_BR_KEY_HEADER
 from app.model.action_type import ActionType
 from app.model.api_models import ErrorResponse, MallSearchResponse
 from app.model.error_code import ErrorCode
@@ -86,6 +85,14 @@ async def search_malls(
         )
 
         if results["success"]:
+            raw_results = results.get("results", [])
+            formatted_results = []
+            for mall in raw_results:
+                enriched_mall = mall.copy()
+                enriched_mall["mall_logo"] = mall.get("mall_logo") or mall.get("logo")
+                enriched_mall["mall_address"] = mall.get("mall_address") or mall.get("address")
+                formatted_results.append(enriched_mall)
+
             if is_new:
                 try:
                     save_search_history(
@@ -106,7 +113,7 @@ async def search_malls(
                     "total_pages": (results["total_found"] + size - 1) // size,
                     "has_more": results.get("has_more", False),
                 },
-                "results": results["results"],
+                "results": formatted_results,
             }
             return success(response_data)
         else:

@@ -7,8 +7,7 @@ from typing import Any, Dict, List
 import httpx
 from dotenv import load_dotenv
 
-from app.exception.custom_exceptions import (AIProcessingError, GeminiAPIError,
-                                             MCPValidationError)
+from app.exception.custom_exceptions import AIProcessingError, GeminiAPIError, MCPValidationError
 from app.utils.logger import elasticsearch_logger
 
 root_path = Path(__file__).parent.parent.parent
@@ -434,7 +433,11 @@ class ElasticsearchService:
             "mall_id",
             "mall_name",
             "mall_type",
+            "mall_logo",
+            "logo",
             "mall_coordinates",
+            "mall_address",
+            "address",
             "updated_at",
             "mall_information_id",
             "number_of_floors",
