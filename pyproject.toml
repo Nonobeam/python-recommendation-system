@@ -21,6 +21,7 @@ dependencies = [
     "httpx>=0.25.0",
     "PyJWT>=2.8.0",
     "elasticsearch>=8.15.0",
+    "google-genai>=0.6.0",
 ]
 
 [project.optional-dependencies]

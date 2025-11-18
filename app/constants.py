@@ -54,3 +54,12 @@ LOG_LEVEL_DEBUG = "DEBUG"
 LOG_LEVEL_INFO = "INFO"
 LOG_LEVEL_WARNING = "WARNING"
 LOG_LEVEL_ERROR = "ERROR"
+
+# Document Processing
+MAX_CONTRACT_FILE_SIZE_BYTES = 5 * 1024 * 1024
+SUPPORTED_CONTRACT_MIME_TYPES = (
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+)
