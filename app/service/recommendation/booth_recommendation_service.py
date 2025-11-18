@@ -1,12 +1,10 @@
 from typing import Any, Dict, List, Optional
 
 from app.exception.recommendation_exceptions import DemographicsError
-from app.service.recommendation.booth_filter_extractor import \
-    BoothFilterExtractor
+from app.service.recommendation.booth_filter_extractor import BoothFilterExtractor
 from app.service.recommendation.booth_repository import BoothRepositoryInstance
-from app.service.recommendation.booth_scorer import BoothScorer
-from app.service.recommendation.repositories import (
-    BrandDemographicDataSource, MallDemographicDataSource)
+from app.service.recommendation.repositories import BrandDemographicDataSource, MallDemographicDataSource
+from app.service.recommendation.scoring import BoothScorer
 from app.service.recommendation.services import BatchMatchService
 from app.utils.logger import api_logger
 
@@ -141,8 +139,7 @@ class BoothRecommendationService:
         brand_meta = brand_data.get("meta_data", brand_data)
         mall_meta = mall_data.get("meta_data", mall_data)
 
-        from app.service.recommendation.business_match_scorer import \
-            BusinessMatchScorer
+        from app.service.recommendation.scoring import BusinessMatchScorer
 
         scorer = BusinessMatchScorer(brand_meta, mall_meta)
         mall_result = scorer.compute_final_score()

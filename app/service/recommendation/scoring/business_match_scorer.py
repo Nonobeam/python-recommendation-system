@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple
 
+from .score_calculator import apply_mall_adjustments, normalize_score
 from .scoring_utils import is_valid_number, safe_get_number
 
 
@@ -401,46 +402,6 @@ class BusinessMatchScorer:
                 "explanations": explanations,
             }
 
-        final_score = (total / max_possible_score) * 100
-
-        fc = self.brand.get("financial_capacity", {})
-        op = self.brand.get("operational_profile", {})
-        pc = self.mall.get("pricing_context", {})
-        te = self.mall.get("tenant_ecosystem", {})
-        tsm = self.mall.get("tenant_success_metrics", {})
-
-        space_required = safe_get_number(op, "space_requirement_m2")
-        avg_rent_per_sqm = safe_get_number(pc, "avg_rent_per_sqm")
-        max_aff_rent = safe_get_number(fc, "max_affordable_rent")
-
-        if space_required is not None and avg_rent_per_sqm is not None and max_aff_rent is not None:
-            estimated_rent = space_required * avg_rent_per_sqm
-            if estimated_rent > max_aff_rent:
-                final_score *= 0.7
-
-        occupancy_rate = safe_get_number(te, "occupancy_rate")
-        if occupancy_rate is not None and occupancy_rate < 40:
-            final_score *= 0.8
-
-        shop_pct = safe_get_number(te, "shop_percent")
-        food_pct = safe_get_number(te, "food_percent")
-        service_pct = safe_get_number(te, "service_percent")
-        if shop_pct is not None or food_pct is not None or service_pct is not None:
-            max_pct = max(
-                shop_pct if shop_pct is not None else 0,
-                food_pct if food_pct is not None else 0,
-                service_pct if service_pct is not None else 0,
-            )
-            if max_pct > 70:
-                final_score *= 0.85
-
-        turnover_rate = safe_get_number(tsm, "tenant_turnover_rate")
-        if turnover_rate is not None and turnover_rate < 10:
-            final_score *= 1.1
-
-        renewal_rate = safe_get_number(tsm, "renewal_rate")
-        if renewal_rate is not None and renewal_rate > 70:
-            final_score *= 1.05
-
-        final_score = max(0, min(round(final_score, 2), 100))
+        base_score = normalize_score(total, max_possible_score)
+        final_score = apply_mall_adjustments(base_score, self.brand, self.mall)
         return {"final_score": final_score, "component_scores": comp_scores, "explanations": explanations}
