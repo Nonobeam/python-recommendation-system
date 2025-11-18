@@ -1,7 +1,6 @@
 from .booth_filter_extractor import BoothFilterExtractor
 from .booth_recommendation_service import BoothRecommendationService
 from .booth_repository import BoothRepository, BoothRepositoryInstance
-from .booth_scorer import BoothScorer
 from .brand_recommendation_service import BrandRecommendationService
 from .brand_repository import BrandRepository, BrandRepositoryInstance
 from .mall_recommendation_service import MallRecommendationService
@@ -14,6 +13,7 @@ from .repositories import (
     PostgresDemographicRepository,
     RedisDemographicRepository,
 )
+from .scoring import BoothScorer
 from .services import BatchMatchService, RecommendationService, SingleMatchService
 
 __all__ = [

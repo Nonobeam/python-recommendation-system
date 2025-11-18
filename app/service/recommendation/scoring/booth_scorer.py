@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple
 
+from .score_calculator import calculate_composite_score, normalize_score
 from .scoring_utils import is_valid_number, safe_get_number
 
 
@@ -292,12 +293,8 @@ class BoothScorer:
                 "explanations": explanations,
             }
 
-        booth_score = (total / max_possible_score) * 100
-
-        if not is_valid_number(self.mall_score):
-            composite_score = float("nan")
-        else:
-            composite_score = (self.mall_score * 0.4) + (booth_score * 0.6)
+        booth_score = normalize_score(total, max_possible_score)
+        composite_score = calculate_composite_score(self.mall_score, booth_score)
 
         return {
             "booth_score": round(booth_score, 2),

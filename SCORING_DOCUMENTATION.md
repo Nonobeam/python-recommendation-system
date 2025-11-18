@@ -7,6 +7,43 @@ The recommendation system uses a rule-based scoring approach to evaluate compati
 1. **BusinessMatchScorer**: Evaluates compatibility between a brand and a mall
 2. **BoothScorer**: Evaluates compatibility between a brand and a specific booth within a mall
 
+## API Endpoints and Scoring Usage
+
+### Get List Recommended Booths (for a Brand)
+
+**Endpoint:** `GET /pri/api/v1/recommendations/booths?brandId={brand_id}`
+
+**Scoring Logic:**
+1. Uses `BusinessMatchScorer` (via `BatchMatchService`) to score all malls against the brand
+2. Selects top N malls (default: 10) based on mall compatibility scores
+3. Uses `BoothScorer` to score each available booth within those top malls
+4. Returns booths sorted by **composite score** (40% mall + 60% booth)
+
+**Primary Scorer:** `BoothScorer` (with mall score inheritance from `BusinessMatchScorer`)
+
+### Get List Recommended Brands (for a Mall)
+
+**Endpoint:** `GET /pri/api/v1/recommendations/brands?mallId={mall_id}`
+
+**Scoring Logic:**
+1. Uses `BusinessMatchScorer` to calculate mall compatibility score for each brand
+2. For each brand, uses `BoothScorer` to find the best matching booth within the mall
+3. Combines scores: `final_score = (mall_score × 0.6) + (best_booth_score × 0.4)`
+4. If no booth match found: `final_score = mall_score × 0.7` (if booths available) or `mall_score × 0.5` (if no booths)
+5. Returns brands sorted by final score
+
+**Primary Scorer:** `BusinessMatchScorer` (with `BoothScorer` used to find best booth matches)
+
+### Get List Recommended Malls (for a Brand)
+
+**Endpoint:** `GET /pri/api/v1/recommendations/malls?brandId={brand_id}`
+
+**Scoring Logic:**
+1. Uses `BusinessMatchScorer` (via `BatchMatchService`) to score all malls against the brand
+2. Returns malls sorted by mall compatibility score
+
+**Primary Scorer:** `BusinessMatchScorer` only
+
 ## Architecture
 
 ### Scoring Flow

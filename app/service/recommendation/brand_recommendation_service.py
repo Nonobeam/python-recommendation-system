@@ -1,13 +1,13 @@
 import math
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from app.exception.recommendation_exceptions import DemographicsError
 from app.service.recommendation.booth_filter_extractor import BoothFilterExtractor
 from app.service.recommendation.booth_repository import BoothRepositoryInstance
-from app.service.recommendation.booth_scorer import BoothScorer
 from app.service.recommendation.brand_repository import BrandRepositoryInstance
-from app.service.recommendation.business_match_scorer import BusinessMatchScorer
 from app.service.recommendation.repositories import BrandDemographicDataSource, MallDemographicDataSource
+from app.service.recommendation.scoring import BoothScorer, BusinessMatchScorer
+from app.service.recommendation.scoring.score_calculator import calculate_brand_recommendation_score
 from app.utils.logger import api_logger
 
 
@@ -92,7 +92,7 @@ class BrandRecommendationService:
                             api_logger.error(f"Error scoring booth {booth_id} for brand {brand_id}: {str(e)}")
                             continue
 
-                final_score = self._calculate_final_brand_score(
+                final_score = calculate_brand_recommendation_score(
                     mall_compatibility_score, booth_match_score, available_booths_count
                 )
 
@@ -122,16 +122,3 @@ class BrandRecommendationService:
             scored_brand["brand_logo"] = brand_detail.get("brand_logo")
 
         return scored_brands
-
-    def _calculate_final_brand_score(
-        self, mall_score: float, booth_score: Optional[float], available_booths_count: int
-    ) -> float:
-        if booth_score is not None and booth_score > 0:
-            final_score = (mall_score * 0.6) + (booth_score * 0.4)
-        else:
-            if available_booths_count > 0:
-                final_score = mall_score * 0.7
-            else:
-                final_score = mall_score * 0.5
-
-        return min(final_score, 1.0)
