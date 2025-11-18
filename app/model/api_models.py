@@ -98,3 +98,10 @@ class ApiResp(BaseModel, Generic[T]):
     success: bool = Field(..., description="Whether the request was successful", example=True)
     data: Optional[T] = Field(None, description="Response data when successful")
     error: Optional[ErrorResp] = Field(None, description="Error information when failed")
+
+
+class CommissionExtractionResponse(BaseModel):
+    commission_percentage: float = Field(..., description="Extracted commission value", example=5.5)
+    file_name: str = Field(..., description="Uploaded file name", example="contract.pdf")
+    mime_type: str = Field(..., description="Uploaded file MIME type", example="application/pdf")
+    file_size_bytes: int = Field(..., description="Size of the uploaded file in bytes", example=1048576)

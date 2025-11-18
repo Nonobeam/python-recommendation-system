@@ -5,17 +5,17 @@ from typing import List
 from fastapi import APIRouter, Body, Query
 from pydantic import BaseModel, Field
 
-from app.exception.recommendation_exceptions import (DemographicsError,
-                                                     ScoreCalculationError)
-from app.model.booth_recommendation_models import (BoothRecommendationItem,
-                                                   BoothRecommendationResponse)
+from app.exception.recommendation_exceptions import DemographicsError, ScoreCalculationError
+from app.model.booth_recommendation_models import BoothRecommendationItem, BoothRecommendationResponse
+from app.model.brand_recommendation_models import BrandRecommendationItem, BrandRecommendationResponse
 from app.model.error_code import ErrorCode
 from app.model.exception_mapper import map_exception_to_error_code
+from app.model.mall_recommendation_models import MallRecommendationItem, MallRecommendationResponse
 from app.model.response_helper import error, success
-from app.service.recommendation.booth_recommendation_service import \
-    BoothRecommendationService
-from app.service.recommendation.services import (BatchMatchService,
-                                                 SingleMatchService)
+from app.service.recommendation.booth_recommendation_service import BoothRecommendationService
+from app.service.recommendation.brand_recommendation_service import BrandRecommendationService
+from app.service.recommendation.mall_recommendation_service import MallRecommendationService
+from app.service.recommendation.services import BatchMatchService, SingleMatchService
 from app.utils.logger import api_logger
 from app.utils.metrics import GLOBAL_METRICS
 
@@ -329,5 +329,120 @@ async def get_recommended_booths_by_mall(
 
     except Exception as e:
         api_logger.error(f"Unexpected error in booth recommendations by mall: {str(e)}")
+        error_code, message = map_exception_to_error_code(e)
+        return error(error_code, message)
+
+
+@router.get("/recommendations/malls")
+async def get_recommended_malls(
+    brandId: str = Query(..., description="Brand identifier (UUID)"),
+    pageNumber: int = Query(1, ge=1, description="Page number"),
+    pageSize: int = Query(10, ge=1, le=100, description="Number of results per page"),
+):
+    """
+    Get recommended malls for a brand.
+
+    Filter parameters are automatically extracted from:
+    - Brand demographics (financial capacity, operational profile, requirements)
+    - Brand search history (using AI to infer preferences)
+
+    Returns ranked list of malls sorted by compatibility score (descending).
+    Each result includes mall details, scores, and explanations.
+    """
+    try:
+        if not is_valid_uuid(brandId):
+            return error(ErrorCode.VALIDATION_ERROR, f"Invalid brandId format: {brandId}")
+
+        service = MallRecommendationService()
+        all_results = await service.get_recommended_malls(brandId)
+
+        total_results = len(all_results)
+        total_pages = (total_results + pageSize - 1) // pageSize if total_results > 0 else 0
+        start_idx = (pageNumber - 1) * pageSize
+        end_idx = start_idx + pageSize
+        paginated_results = all_results[start_idx:end_idx]
+
+        response_data = MallRecommendationResponse(
+            brand_id=brandId,
+            total_results=total_results,
+            page=pageNumber,
+            page_size=pageSize,
+            total_pages=total_pages,
+            has_more=pageNumber < total_pages,
+            results=[MallRecommendationItem(**item) for item in paginated_results],
+        )
+
+        return success(response_data.dict())
+
+    except DemographicsError as e:
+        api_logger.warning(f"Demographics error: {str(e)}")
+        error_code, message = map_exception_to_error_code(e)
+        return error(error_code, message)
+
+    except ScoreCalculationError as e:
+        api_logger.error(f"Score calculation error: {str(e)}")
+        error_code, message = map_exception_to_error_code(e)
+        return error(error_code, message)
+
+    except Exception as e:
+        api_logger.error(f"Unexpected error in mall recommendations: {str(e)}")
+        error_code, message = map_exception_to_error_code(e)
+        return error(error_code, message)
+
+
+@router.get("/recommendations/brands")
+async def get_recommended_brands(
+    mallId: str = Query(..., description="Mall identifier (UUID)"),
+    pageNumber: int = Query(1, ge=1, description="Page number"),
+    pageSize: int = Query(10, ge=1, le=100, description="Number of results per page"),
+):
+    """
+    Get recommended brands for a mall.
+
+    Scoring considers:
+    - Brand-mall compatibility (demographics match)
+    - Available booths in the mall that match brand requirements
+    - Best booth match score for each brand
+
+    Returns ranked list of brands sorted by composite score (descending).
+    Each result includes brand details, scores, and explanations.
+    """
+    try:
+        if not is_valid_uuid(mallId):
+            return error(ErrorCode.VALIDATION_ERROR, f"Invalid mallId format: {mallId}")
+
+        service = BrandRecommendationService()
+        all_results = await service.get_recommended_brands(mallId)
+
+        total_results = len(all_results)
+        total_pages = (total_results + pageSize - 1) // pageSize if total_results > 0 else 0
+        start_idx = (pageNumber - 1) * pageSize
+        end_idx = start_idx + pageSize
+        paginated_results = all_results[start_idx:end_idx]
+
+        response_data = BrandRecommendationResponse(
+            mall_id=mallId,
+            total_results=total_results,
+            page=pageNumber,
+            page_size=pageSize,
+            total_pages=total_pages,
+            has_more=pageNumber < total_pages,
+            results=[BrandRecommendationItem(**item) for item in paginated_results],
+        )
+
+        return success(response_data.dict())
+
+    except DemographicsError as e:
+        api_logger.warning(f"Demographics error: {str(e)}")
+        error_code, message = map_exception_to_error_code(e)
+        return error(error_code, message)
+
+    except ScoreCalculationError as e:
+        api_logger.error(f"Score calculation error: {str(e)}")
+        error_code, message = map_exception_to_error_code(e)
+        return error(error_code, message)
+
+    except Exception as e:
+        api_logger.error(f"Unexpected error in brand recommendations: {str(e)}")
         error_code, message = map_exception_to_error_code(e)
         return error(error_code, message)
