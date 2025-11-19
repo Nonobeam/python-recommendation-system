@@ -1,5 +1,9 @@
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from app.config.db import get_db
 from app.config.elasticsearch import AISearchService, ElasticsearchService
 from app.model.error_code import ErrorCode
 from app.model.exception_mapper import map_exception_to_error_code
@@ -13,6 +17,51 @@ class SearchService:
     def __init__(self):
         self.elasticsearch_service = ElasticsearchService()
         self.ai_search_service = AISearchService()
+
+    def _get_booth_images(self, booth_ids: List[str]) -> Dict[str, Optional[str]]:
+        """
+        Query database to get imageUrl for booths from booth_visual_assets table.
+        Only returns images where displayOrder == 0 and assetType == 'IMAGE'.
+
+        Args:
+            booth_ids: List of booth IDs to fetch images for
+
+        Returns:
+            Dictionary mapping booth_id to imageUrl (or None if not found)
+        """
+        if not booth_ids:
+            return {}
+
+        db: Session = next(get_db())
+        try:
+            placeholders = ",".join([f":booth_id_{i}" for i in range(len(booth_ids))])
+            query = text(
+                f"""
+                SELECT
+                    bva.booth_id,
+                    bva.file_url as image_url
+                FROM platform_service.booth_visual_assets bva
+                WHERE bva.booth_id IN ({placeholders})
+                    AND bva.display_order = 0
+                    AND bva.asset_type = 'IMAGE'
+            """
+            )
+
+            params = {f"booth_id_{i}": booth_id for i, booth_id in enumerate(booth_ids)}
+
+            results = db.execute(query, params).fetchall()
+
+            image_map = {}
+            for row in results:
+                image_map[row.booth_id] = row.image_url
+
+            return image_map
+
+        except Exception as e:
+            api_logger.error(f"Error fetching booth images: {str(e)}")
+            return {}
+        finally:
+            db.close()
 
     async def search_booths(
         self,
@@ -49,11 +98,16 @@ class SearchService:
 
             if results["success"]:
                 raw_results = results.get("results", [])
+                booth_ids = [booth.get("booth_id") for booth in raw_results if booth.get("booth_id")]
+                image_map = self._get_booth_images(booth_ids)
+
                 formatted_results = []
                 for booth in raw_results:
                     enriched_booth = booth.copy()
                     enriched_booth["mall_logo"] = booth.get("mall_logo") or booth.get("logo")
                     enriched_booth["mall_address"] = booth.get("mall_address") or booth.get("address")
+                    booth_id = booth.get("booth_id")
+                    enriched_booth["imageUrl"] = image_map.get(booth_id) if booth_id else None
                     formatted_results.append(enriched_booth)
 
                 pagination_info = results.get("pagination") or {
