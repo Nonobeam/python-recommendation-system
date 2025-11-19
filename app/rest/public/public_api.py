@@ -1,15 +1,11 @@
 from fastapi import APIRouter, Query
 
-from app.config.elasticsearch import AISearchService, elasticsearch_service
 from app.constants import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MIN_PAGE_SIZE
-from app.model.error_code import ErrorCode
-from app.model.exception_mapper import map_exception_to_error_code
 from app.model.response_helper import error, success
-from app.service.input_validator import InputValidator
+from app.service.search_service import SearchService
 
 router = APIRouter()
-
-ai_search_service = AISearchService()
+search_service = SearchService()
 
 
 @router.get("/")
@@ -46,50 +42,19 @@ async def public_search_malls(
         example=DEFAULT_PAGE_SIZE,
     ),
 ):
-    """Public mall search using AI-powered NLP and Elasticsearch. Does not log or require authentication."""
+    """Public booth search using AI-powered NLP and Elasticsearch. Does not log or require authentication."""
     try:
-        is_valid, error_message = InputValidator.validate_query_message(q)
-        if not is_valid:
-            return error(ErrorCode.VALIDATION_ERROR, error_message)
-
-        sanitized_query = InputValidator.sanitize_message(q)
-        if not sanitized_query:
-            return error(ErrorCode.VALIDATION_ERROR, "Invalid query format")
-
-        results = await elasticsearch_service.search_malls_with_ai(
-            brand_id=None,
-            query=sanitized_query,
-            ai_service=ai_search_service,
-            page=pageNumber,
-            size=pageSize,
+        success_flag, data, error_code, error_message = await search_service.search_booths(
+            query=q, page_number=pageNumber, page_size=pageSize, brand_id=None
         )
-        if results.get("success"):
-            pagination_info = results.get("pagination") or {
-                "pageNumber": results.get("page", pageNumber),
-                "pageSize": results.get("size", pageSize),
-                "totalResults": results.get("total_found", 0),
-                "totalPages": (results.get("total_found", 0) + pageSize - 1) // pageSize,
-                "hasMore": results.get("has_more", False),
-            }
-            response_data = {
-                "extracted_criteria": results["extracted_criteria"],
-                "pagination": pagination_info,
-                "results": results["results"],
-            }
-            return success(response_data)
+
+        if success_flag:
+            return success(data)
         else:
-            error_msg = results.get("error", "Unknown error")
-            if "Gemini API error: API request failed with status 503" in error_msg:
-                return error(
-                    ErrorCode.GEMINI_API_ERROR, "AI search service is temporarily unavailable. Please try again later."
-                )
-            elif "AI extraction failed" in error_msg:
-                return error(
-                    ErrorCode.GEMINI_API_ERROR,
-                    "AI processing service is currently unavailable. Please try again later.",
-                )
-            else:
-                return error(ErrorCode.SERVICE_UNAVAILABLE, f"Search failed: {error_msg}")
+            return error(error_code, error_message)
     except Exception as e:
+        from app.model.exception_mapper import map_exception_to_error_code
+        from app.model.response_helper import error
+
         error_code, message = map_exception_to_error_code(e)
         return error(error_code, message)
