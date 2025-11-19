@@ -2,7 +2,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import httpx
 from dotenv import load_dotenv
@@ -349,6 +349,43 @@ class ElasticsearchService:
         except Exception as e:
             return {"success": False, "error": f"Search operation failed: {str(e)}", "results": []}
 
+    async def search_booths_with_ai(
+        self, brand_id: Optional[str], query: str, ai_service: AISearchService, page: int = 1, size: int = 10
+    ) -> dict:
+        """Main function: Extract criteria using AI, then query Elasticsearch for booths"""
+        try:
+            extraction_result = await ai_service.extract_search_criteria(query)
+
+            if not extraction_result["success"]:
+                return {"success": False, "error": f"AI extraction failed: {extraction_result['error']}", "results": []}
+
+            criteria = extraction_result["criteria"]
+
+            search_result = self.search_booths_with_ai_criteria(criteria, page, size)
+            total_found = search_result.get("total", 0)
+            pagination = {
+                "pageNumber": search_result.get("page", page),
+                "pageSize": search_result.get("size", size),
+                "totalResults": total_found,
+                "totalPages": (total_found + size - 1) // size if size else 0,
+                "hasMore": search_result.get("has_more", False),
+            }
+
+            return {
+                "success": search_result["success"],
+                "original_query": query,
+                "extracted_criteria": criteria,
+                "total_found": total_found,
+                "page": page,
+                "size": size,
+                "pagination": pagination,
+                "results": search_result.get("results", []),
+                "error": search_result.get("error"),
+            }
+
+        except Exception as e:
+            return {"success": False, "error": f"Search operation failed: {str(e)}", "results": []}
+
     def search_malls_with_ai_criteria(self, criteria: Dict[str, Any], page: int = 1, size: int = 10) -> dict:
         """Search malls using AI-extracted structured criteria with pagination"""
         try:
@@ -396,6 +433,227 @@ class ElasticsearchService:
 
         except Exception as e:
             return {"success": False, "error": str(e), "results": []}
+
+    def search_booths_with_ai_criteria(self, criteria: Dict[str, Any], page: int = 1, size: int = 10) -> dict:
+        """Search booths using AI-extracted structured criteria with pagination"""
+        try:
+            client = self.get_client()
+
+            from_offset = (page - 1) * size
+
+            query_parts = []
+
+            if "general_search" in criteria:
+                query_parts.append(self._build_general_booth_search_query(criteria["general_search"]))
+            else:
+                query_parts = self._build_structured_booth_query(criteria)
+
+            if not query_parts:
+                search_body = {"query": {"match_all": {}}, "from": from_offset, "size": size}
+            else:
+                search_body = {
+                    "query": {"bool": {"must": query_parts}},
+                    "from": from_offset,
+                    "size": size,
+                    "_source": self._get_booth_source_fields(),
+                }
+
+            response = client.search(index="booth", body=search_body)
+
+            total_hits = response["hits"]["total"]["value"]
+            returned_results = len(response["hits"]["hits"])
+
+            elasticsearch_logger.debug(
+                f"AI-powered booth search - Total hits: {total_hits}, Page: {page}, Size: {size}, From: {from_offset}"
+            )
+
+            return {
+                "success": True,
+                "total": total_hits,
+                "page": page,
+                "size": size,
+                "from": from_offset,
+                "returned": returned_results,
+                "has_more": from_offset + returned_results < total_hits,
+                "results": [{**hit["_source"], "_score": hit["_score"]} for hit in response["hits"]["hits"]],
+            }
+
+        except Exception as e:
+            return {"success": False, "error": str(e), "results": []}
+
+    def _build_structured_booth_query(self, criteria: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Build structured Elasticsearch query for booths from AI-extracted criteria"""
+        query_parts = []
+
+        for field, value in criteria.items():
+            if field == "general_search":
+                continue
+
+            if field in {"street", "district", "ward", "city", "address"}:
+                mapped_field = "mall_address"
+                if isinstance(value, str):
+                    query_parts.append(
+                        {
+                            "match": {
+                                mapped_field: {
+                                    "query": value,
+                                    "operator": "and",
+                                    "fuzziness": "AUTO",
+                                }
+                            }
+                        }
+                    )
+                elif isinstance(value, list):
+                    sub_queries = []
+                    for item in value:
+                        sub_queries.append(
+                            {
+                                "match": {
+                                    mapped_field: {
+                                        "query": item,
+                                        "operator": "and",
+                                        "fuzziness": "AUTO",
+                                    }
+                                }
+                            }
+                        )
+                    if sub_queries:
+                        query_parts.append({"bool": {"should": sub_queries, "minimum_should_match": 1}})
+                continue
+
+            if isinstance(value, str):
+                if field in ["mall_name", "mall_type", "booth_name", "category_name"]:
+                    query_parts.append({"multi_match": {"query": value, "fields": [field], "fuzziness": "AUTO"}})
+                else:
+                    query_parts.append({"wildcard": {f"{field}.keyword": f"*{value}*"}})
+
+            elif isinstance(value, list):
+                should_queries = []
+                for item in value:
+                    if field in ["mall_name", "mall_type", "booth_name", "category_name"]:
+                        should_queries.append({"multi_match": {"query": item, "fields": [field], "fuzziness": "AUTO"}})
+                    else:
+                        should_queries.append({"match": {field: item}})
+
+                if should_queries:
+                    query_parts.append({"bool": {"should": should_queries, "minimum_should_match": 1}})
+
+            elif isinstance(value, dict):
+                range_query = {}
+                for op, val in value.items():
+                    if op in ["min", "gte"]:
+                        range_query["gte"] = val
+                    elif op in ["max", "lte"]:
+                        range_query["lte"] = val
+                    elif op == "gt":
+                        range_query["gt"] = val
+                    elif op == "lt":
+                        range_query["lt"] = val
+
+                if range_query:
+                    query_parts.append({"range": {field: range_query}})
+
+            elif isinstance(value, bool):
+                query_parts.append({"term": {field: value}})
+
+            elif isinstance(value, (int, float)):
+                query_parts.append({"term": {field: value}})
+
+        return query_parts
+
+    def _build_general_booth_search_query(self, query: str) -> Dict[str, Any]:
+        """Build general search query for booths with unstructured queries"""
+        return {
+            "multi_match": {
+                "query": query,
+                "fields": [
+                    "booth_name^3",
+                    "mall_name^3",
+                    "mall_address^3",
+                    "mall_type^2",
+                    "category_name^2",
+                    "floor_name",
+                    "booth_description",
+                    "zone_description",
+                    "overtime_fee_policy",
+                    "operating_hours_weekday",
+                    "operating_hours_weekend",
+                    "contact_phone",
+                    "contact_email",
+                    "website",
+                ],
+                "fuzziness": "AUTO",
+            }
+        }
+
+    def _get_booth_source_fields(self) -> List[str]:
+        """Get list of fields to return in booth search results"""
+        return [
+            "booth_id",
+            "booth_name",
+            "floor_position_reference",
+            "size_m2",
+            "is_available",
+            "booth_verify_status",
+            "booth_status",
+            "booth_requirement",
+            "booth_updated_at",
+            "booth_created_at",
+            "mall_id",
+            "mall_name",
+            "mall_type",
+            "mall_address",
+            "mall_coordinates",
+            "mall_logo",
+            "mall_status",
+            "mall_verify_status",
+            "mall_information_id",
+            "number_of_floors",
+            "total_floor_area_m2",
+            "management_fee_usd",
+            "motorbike_fee_vnd",
+            "car_fee_vnd",
+            "overtime_fee_policy",
+            "opening_year",
+            "operating_hours_weekday",
+            "operating_hours_weekend",
+            "contact_phone",
+            "contact_email",
+            "website",
+            "parking_motorbike_spaces",
+            "parking_car_spaces",
+            "has_public_transport_access",
+            "has_loading_dock",
+            "has_elevator",
+            "has_escalator",
+            "mall_info_updated_at",
+            "floor_id",
+            "floor_level",
+            "floor_name",
+            "floor_description",
+            "zone_id",
+            "categories_id",
+            "category_name",
+            "booth_information_id",
+            "zone_description",
+            "shape",
+            "ceiling_height_m",
+            "frontage_width_m",
+            "has_windows",
+            "has_column_obstacles",
+            "has_electricity",
+            "electricity_capacity_kw",
+            "has_water_supply",
+            "has_gas_line",
+            "has_drainage",
+            "has_ventilation",
+            "has_grease_trap",
+            "has_internet",
+            "has_storage_area",
+            "storage_area_m2",
+            "booth_description",
+            "updated_at",
+        ]
 
     def _build_structured_query(self, criteria: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Build structured Elasticsearch query from AI-extracted criteria"""

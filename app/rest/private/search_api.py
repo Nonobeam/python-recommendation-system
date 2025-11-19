@@ -3,20 +3,16 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, Query
 
 from app.auth.token_data import TokenData, get_current_user
-from app.config.elasticsearch import AISearchService, ElasticsearchService
 from app.constants import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MIN_PAGE_SIZE, X_BR_KEY_HEADER
 from app.model.action_type import ActionType
 from app.model.api_models import ErrorResponse, MallSearchResponse
-from app.model.error_code import ErrorCode
-from app.model.exception_mapper import map_exception_to_error_code
 from app.model.response_helper import error, success
 from app.model.search_history import save_search_history
-from app.service.input_validator import InputValidator
+from app.service.search_service import SearchService
 from app.utils.logger import api_logger
 
 router = APIRouter()
-elasticsearch_service = ElasticsearchService()
-ai_search_service = AISearchService()
+search_service = SearchService()
 
 
 @router.get(
@@ -68,73 +64,32 @@ async def search_malls(
         example=True,
     ),
 ):
-    """Search malls using AI-powered natural language processing and Elasticsearch"""
+    """Search booths using AI-powered natural language processing and Elasticsearch"""
     try:
-        is_valid, error_message = InputValidator.validate_query_message(q)
-        if not is_valid:
-            api_logger.warning(f"Invalid search query from user {current_user.user_id}: {error_message}")
-            return error(ErrorCode.VALIDATION_ERROR, error_message)
-
-        sanitized_query = InputValidator.sanitize_message(q)
-        if not sanitized_query:
-            api_logger.warning(f"Failed to sanitize query from user {current_user.user_id}")
-            return error(ErrorCode.VALIDATION_ERROR, "Invalid query format")
-
-        results = await elasticsearch_service.search_malls_with_ai(
-            x_br_key, sanitized_query, ai_search_service, pageNumber, pageSize
+        success_flag, data, error_code, error_message = await search_service.search_booths(
+            query=q, page_number=pageNumber, page_size=pageSize, brand_id=x_br_key
         )
 
-        if results["success"]:
-            raw_results = results.get("results", [])
-            formatted_results = []
-            for mall in raw_results:
-                enriched_mall = mall.copy()
-                enriched_mall["mall_logo"] = mall.get("mall_logo") or mall.get("logo")
-                enriched_mall["mall_address"] = mall.get("mall_address") or mall.get("address")
-                formatted_results.append(enriched_mall)
-
-            pagination_info = results.get("pagination") or {
-                "pageNumber": results.get("page", pageNumber),
-                "pageSize": results.get("size", pageSize),
-                "totalResults": results["total_found"],
-                "totalPages": (results["total_found"] + pageSize - 1) // pageSize,
-                "hasMore": results.get("has_more", False),
-            }
-
+        if success_flag:
             if is_new:
                 try:
                     save_search_history(
                         user_id=current_user.user_id,
                         brand_id=x_br_key,
                         action_type=ActionType.SEARCH_MALL,
-                        search_query=sanitized_query,
+                        search_query=q,
                     )
                 except Exception as e:
                     api_logger.warning(f"Failed to save search history: {str(e)}")
 
-            response_data = {
-                "extracted_criteria": results["extracted_criteria"],
-                "pagination": pagination_info,
-                "results": formatted_results,
-            }
-            return success(response_data)
+            return success(data)
         else:
-            error_msg = results.get("error", "Unknown error")
-            api_logger.error(f"AI search failed for brand {x_br_key}: {error_msg}")
-
-            if "Gemini API error: API request failed with status 503" in error_msg:
-                return error(
-                    ErrorCode.GEMINI_API_ERROR, "AI search service is temporarily unavailable. Please try again later."
-                )
-            elif "AI extraction failed" in error_msg:
-                return error(
-                    ErrorCode.GEMINI_API_ERROR,
-                    "AI processing service is currently unavailable. Please try again later.",
-                )
-            else:
-                return error(ErrorCode.SERVICE_UNAVAILABLE, f"Search failed: {error_msg}")
+            return error(error_code, error_message)
 
     except Exception as e:
         api_logger.error(f"Unexpected error in search for brand {x_br_key}: {str(e)}")
+        from app.model.exception_mapper import map_exception_to_error_code
+        from app.model.response_helper import error
+
         error_code, message = map_exception_to_error_code(e)
         return error(error_code, message)
