@@ -7,11 +7,9 @@ class BrandRecommendationItem(BaseModel):
     brand_id: str = Field(..., description="Brand identifier")
     brand_name: Optional[str] = Field(None, description="Brand name")
     brand_logo: Optional[str] = Field(None, description="Brand logo URL")
-    final_score: float = Field(..., description="Final compatibility score (0-1)")
+    final_score: int = Field(..., description="Final compatibility score (rounded down)")
     mall_compatibility_score: float = Field(..., description="Brand-mall compatibility score")
     booth_match_score: Optional[float] = Field(None, description="Best booth match score")
-    component_scores: Optional[dict] = Field(None, description="Component score breakdown")
-    explanations: Optional[List[str]] = Field(None, description="Score explanations")
     available_booths_count: int = Field(0, description="Number of available booths matching brand requirements")
 
 

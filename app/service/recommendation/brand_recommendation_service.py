@@ -95,14 +95,13 @@ class BrandRecommendationService:
                 final_score = calculate_brand_recommendation_score(
                     mall_compatibility_score, booth_match_score, available_booths_count
                 )
+                rounded_final_score = math.floor(final_score)
 
                 scored_brand = {
                     "brand_id": brand_id,
-                    "final_score": final_score,
+                    "final_score": rounded_final_score,
                     "mall_compatibility_score": mall_compatibility_score,
                     "booth_match_score": booth_match_score,
-                    "component_scores": mall_result.get("component_scores"),
-                    "explanations": mall_result.get("explanations"),
                     "available_booths_count": available_booths_count,
                 }
                 scored_brands.append(scored_brand)

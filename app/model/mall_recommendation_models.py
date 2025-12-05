@@ -8,9 +8,7 @@ class MallRecommendationItem(BaseModel):
     mall_name: Optional[str] = Field(None, description="Mall name")
     mall_logo: Optional[str] = Field(None, description="Mall logo URL")
     mall_address: Optional[str] = Field(None, description="Mall address")
-    final_score: float = Field(..., description="Final compatibility score (0-1)")
-    component_scores: Optional[dict] = Field(None, description="Component score breakdown")
-    explanations: Optional[List[str]] = Field(None, description="Score explanations")
+    final_score: int = Field(..., description="Final compatibility score (rounded down)")
 
 
 class MallRecommendationResponse(BaseModel):
