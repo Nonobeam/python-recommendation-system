@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional
 
 from app.config.elasticsearch import AISearchService
+from app.constants import STARTUP_CHEAP_BOOTH_PRICE_THRESHOLD
 from app.model.search_history import get_brand_search_history
 from app.service.recommendation.repositories import BrandDemographicDataSource
 from app.utils.logger import api_logger
@@ -17,9 +18,14 @@ class BoothFilterExtractor:
         Returns a dictionary with filter parameters:
         - category_id: From brand operational profile
         - min_size, max_size: From brand space requirements
-        - max_price: From brand financial capacity
+        - max_price: From brand financial capacity or cheap threshold for startups
         - preferred_floors: From brand requirements or inferred from search history
         - preferred_districts: Inferred from search history using AI
+
+        Startup brand detection:
+        If transaction value is negative, the brand is considered a startup with low
+        financial capacity. In this case, max_price is set to a cheap booth threshold
+        (STARTUP_CHEAP_BOOTH_PRICE_THRESHOLD) to recommend affordable booths.
         """
         filters: Dict[str, Any] = {}
 
@@ -44,8 +50,16 @@ class BoothFilterExtractor:
             filters["min_size"] = space_required * (1 - size_tolerance)
             filters["max_size"] = space_required * (1 + size_tolerance)
 
+        transaction_value = fc.get("transaction", 0)
         max_affordable_rent = fc.get("max_affordable_rent", 0)
-        if max_affordable_rent and max_affordable_rent > 0:
+
+        if transaction_value is not None and transaction_value < 0:
+            filters["max_price"] = STARTUP_CHEAP_BOOTH_PRICE_THRESHOLD
+            api_logger.warn(
+                f"Brand {brand_id} has negative transaction value ({transaction_value}), "
+                f"applying cheap booth price threshold: {STARTUP_CHEAP_BOOTH_PRICE_THRESHOLD}"
+            )
+        elif max_affordable_rent and max_affordable_rent > 0:
             filters["max_price"] = max_affordable_rent
 
         preferred_floors = req.get("preferred_floors", [])

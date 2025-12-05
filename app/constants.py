@@ -5,6 +5,8 @@ This module contains all application-wide constants used across different contro
 Following Python best practices, constants are defined in UPPER_CASE with descriptive names.
 """
 
+import os
+
 # API Header Constants
 X_BR_KEY_HEADER = "X-BR-KEY"
 
@@ -63,3 +65,5 @@ SUPPORTED_CONTRACT_MIME_TYPES = (
     "image/jpeg",
     "image/webp",
 )
+
+STARTUP_CHEAP_BOOTH_PRICE_THRESHOLD = float(os.getenv("STARTUP_CHEAP_BOOTH_PRICE_THRESHOLD", "2000000"))
