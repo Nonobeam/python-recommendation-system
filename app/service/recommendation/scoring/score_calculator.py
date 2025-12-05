@@ -27,13 +27,21 @@ def apply_mall_adjustments(
     """
     Apply adjustment factors to a mall compatibility score based on business rules.
 
+    Applies three penalty multipliers:
+    - Over Budget Penalty: If estimated_rent > max_affordable_rent: score × 0.7
+    - Low Occupancy Penalty: If occupancy_rate < 40%: score × 0.8
+    - Oversaturation Penalty: If any category > 70%: score × 0.85
+
     Args:
         base_score: Base score before adjustments (0-100)
         brand: Brand data dictionary
         mall: Mall data dictionary
 
     Returns:
-        Adjusted score (0-100)
+        Adjusted score (0-100), clamped between 0 and 100
+
+    Note:
+        Tenant success metrics (turnover/renewal bonuses) have been removed.
     """
     if not is_valid_number(base_score):
         return base_score
@@ -44,7 +52,6 @@ def apply_mall_adjustments(
     op = brand.get("operational_profile", {})
     pc = mall.get("pricing_context", {})
     te = mall.get("tenant_ecosystem", {})
-    tsm = mall.get("tenant_success_metrics", {})
 
     space_required = safe_get_number(op, "space_requirement_m2")
     avg_rent_per_sqm = safe_get_number(pc, "avg_rent_per_sqm")
@@ -70,14 +77,6 @@ def apply_mall_adjustments(
         )
         if max_pct > 70:
             adjusted_score *= 0.85
-
-    turnover_rate = safe_get_number(tsm, "tenant_turnover_rate")
-    if turnover_rate is not None and turnover_rate < 10:
-        adjusted_score *= 1.1
-
-    renewal_rate = safe_get_number(tsm, "renewal_rate")
-    if renewal_rate is not None and renewal_rate > 70:
-        adjusted_score *= 1.05
 
     return max(0, min(round(adjusted_score, 2), 100))
 

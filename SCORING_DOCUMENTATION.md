@@ -113,19 +113,11 @@ Evaluates category representation in the mall to avoid oversaturation.
 - Category percent < 70%: **5 points** (somewhat oversaturated)
 - Category percent ≥ 70%: **0 points** (oversaturated)
 
-**Zone Match Bonus:**
-- Brand's target zones match available mall zones: **+5 points**
-
 **Maximum:** 30 points
 
 #### 3. Market Position (20 points max)
 
 Evaluates alignment between brand positioning and mall demographics.
-
-**Spending Power Alignment:**
-- Premium/Luxury brand: `premium_percent × 0.4` points
-- Mid-range brand: `mid_range_percent × 0.4` points
-- Budget brand: `budget_percent × 0.4` points
 
 **Mall Type Match:**
 - Mall type matches brand's preferred types: **+10 points**
@@ -141,15 +133,12 @@ Evaluates alignment between brand positioning and mall demographics.
 
 #### 4. Operational Compatibility (15 points max)
 
-Evaluates facilities and operating hours alignment.
+Evaluates facilities alignment.
 
 **Facilities Match:**
 - Score = `(matched_facilities / required_facilities) × 10`
 - Examples: electricity, water, ventilation, drainage, gas, internet
-
-**Operating Hours Overlap:**
-- Brand hours overlap mall peak hours: **+5 points**
-- No overlap or missing data: **+2 points** (partial)
+- No facilities requirements: **+5 points** (baseline)
 
 **Maximum:** 15 points
 
@@ -181,8 +170,6 @@ Evaluates mall location proximity and accessibility.
    - **Over Budget Penalty:** If estimated rent > max_affordable_rent: `final_score × 0.7`
    - **Low Occupancy Penalty:** If occupancy < 40%: `final_score × 0.8`
    - **Oversaturation Penalty:** If any category > 70%: `final_score × 0.85`
-   - **Low Turnover Bonus:** If turnover < 10%: `final_score × 1.1`
-   - **High Renewal Bonus:** If renewal rate > 70%: `final_score × 1.05`
 
 3. **Final Score:** Clamped between 0 and 100
 

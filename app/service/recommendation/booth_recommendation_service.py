@@ -1,5 +1,9 @@
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from app.config.db import get_db
 from app.exception.recommendation_exceptions import DemographicsError
 from app.service.recommendation.booth_filter_extractor import BoothFilterExtractor
 from app.service.recommendation.booth_repository import BoothRepositoryInstance
@@ -14,6 +18,28 @@ class BoothRecommendationService:
         self.booth_repository = BoothRepositoryInstance
         self.batch_match_service = BatchMatchService()
         self.filter_extractor = BoothFilterExtractor()
+
+    def _check_waitlist_status(self, brand_id: str, booth_ids: List[str]) -> Dict[str, bool]:
+        if not booth_ids:
+            return {}
+
+        db: Session = next(get_db())
+        try:
+            query = text(
+                """
+                SELECT booth_id
+                FROM platform_service.brand_mall_waitlist
+                WHERE brand_id = :brand_id AND booth_id = ANY(:booth_ids)
+                """
+            )
+            results = db.execute(query, {"brand_id": brand_id, "booth_ids": booth_ids}).fetchall()
+            waitlisted_booth_ids = {row.booth_id for row in results}
+            return {booth_id: booth_id in waitlisted_booth_ids for booth_id in booth_ids}
+        except Exception as e:
+            api_logger.error(f"Error checking waitlist status: {str(e)}")
+            return {booth_id: False for booth_id in booth_ids}
+        finally:
+            db.close()
 
     async def get_recommended_booths(
         self,
@@ -70,6 +96,9 @@ class BoothRecommendationService:
             api_logger.warning(f"No available booths found for brand_id={brand_id} with filters")
             return []
 
+        booth_ids = [booth.get("booth_id") for booth in booths if booth.get("booth_id")]
+        waitlist_status = self._check_waitlist_status(brand_id, booth_ids)
+
         scored_booths = []
         for booth in booths:
             booth_id = booth.get("booth_id")
@@ -97,6 +126,7 @@ class BoothRecommendationService:
                     "mall_name": booth.get("mall_name"),
                     "mall_logo": booth.get("mall_logo") or booth_for_scoring.get("mall_logo"),
                     "mall_address": booth.get("mall_address") or booth_for_scoring.get("mall_address"),
+                    "is_on_waitlist": waitlist_status.get(booth_id, False),
                     "_composite_score": result.get("composite_score", 0),
                 }
                 scored_booths.append(scored_booth)
@@ -164,6 +194,9 @@ class BoothRecommendationService:
             api_logger.warning(f"No available booths found for mall_id={mall_id} with filters")
             return []
 
+        booth_ids = [booth.get("booth_id") for booth in booths if booth.get("booth_id")]
+        waitlist_status = self._check_waitlist_status(brand_id, booth_ids)
+
         scored_booths = []
         for booth in booths:
             booth_id = booth.get("booth_id")
@@ -189,6 +222,7 @@ class BoothRecommendationService:
                     "mall_name": booth.get("mall_name"),
                     "mall_logo": booth.get("mall_logo") or booth_for_scoring.get("mall_logo"),
                     "mall_address": booth.get("mall_address") or booth_for_scoring.get("mall_address"),
+                    "is_on_waitlist": waitlist_status.get(booth_id, False),
                     "_composite_score": result.get("composite_score", 0),
                 }
                 scored_booths.append(scored_booth)

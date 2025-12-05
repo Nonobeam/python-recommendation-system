@@ -2,7 +2,9 @@
 
 ## Overview
 
-This recommendation system calculates compatibility scores between brands and malls using a business-rule based scoring system (no ML vector similarity). All scoring is fully explainable and based on the latest mall/brand demographics contract.
+This recommendation system calculates compatibility scores between brands and malls using a rule-based scoring system (no ML vector similarity). All scoring is fully explainable and based on mall/brand demographics data.
+
+**📖 For detailed scoring framework documentation, see: [`RECOMMENDATION_SCORING_FRAMEWORK.md`](../../../RECOMMENDATION_SCORING_FRAMEWORK.md)**
 
 ## Architecture (Updated)
 
@@ -10,14 +12,15 @@ This recommendation system calculates compatibility scores between brands and ma
 - Uses `repositories.py` for retrieving the latest demographics (brand/mall) from cache/database.
 
 ### Scoring Logic
-- `business_match_scorer.py`: Implements all business rules for matching brands and malls, following explicit scoring criteria:
-    - **Financial Compatibility** (35 pts max)
-    - **Tenant Mix/Category Fit** (30 pts max)
-    - **Market Position & Demographics** (20 pts max)
-    - **Operational Compatibility** (15 pts max)
-    - **Location & Accessibility** (13 pts max)
-- Each section is scored via clear rule-based checks (banded thresholds, bonuses, penalties), not by feature vector math.
-- Legacy vector logic and calculators have been **removed**.
+- `business_match_scorer.py`: Implements all business rules for matching brands and malls:
+    - **Financial Compatibility** (35 points max) - Rent affordability and income stability
+    - **Tenant Mix/Category Fit** (30 points max) - Category oversaturation analysis
+    - **Market Position & Demographics** (20 points max) - Mall type and occupancy health
+    - **Operational Compatibility** (15 points max) - Facility requirements matching
+    - **Location & Accessibility** (13 points max) - Distance and accessibility scoring
+- Each dimension uses explicit thresholds, bonuses, and penalties
+- Scores are normalized to 0-100 scale with adjustment factors applied
+- **Removed features:** Peak hours, spending power matching, zone bonuses, tenant success metrics
 
 ### Service Layer
 - SingleMatchService / BatchMatchService instantiate a `BusinessMatchScorer` for each brand/mall match and return the new output contract.

@@ -5,11 +5,30 @@ from .scoring_utils import is_valid_number, safe_get_number
 
 
 class BusinessMatchScorer:
+    """
+    Calculates brand-mall compatibility scores using a rule-based framework.
+
+    Scoring Dimensions (0-100 scale):
+    1. Financial Compatibility (35 points max)
+    2. Tenant Mix & Category Fit (30 points max)
+    3. Market Position & Demographics (20 points max)
+    4. Operational Compatibility (15 points max)
+    5. Location & Accessibility (13 points max)
+
+    See RECOMMENDATION_SCORING_FRAMEWORK.md for detailed documentation.
+    """
+
     def __init__(self, brand: Dict[str, Any], mall: Dict[str, Any]):
         self.brand = brand
         self.mall = mall
 
     def score_financial(self) -> Tuple[Optional[int], List[str]]:
+        """
+        Score financial compatibility (0-35 points).
+
+        Evaluates rent affordability and income stability.
+        Returns: (score, explanations)
+        """
         explanations = []
         fp = self.brand.get("financial_performance", {})
         fc = self.brand.get("financial_capacity", {})
@@ -30,51 +49,59 @@ class BusinessMatchScorer:
                 safe_get_number({"val": comfort_range[1]}, "val") if len(comfort_range) > 1 else None,
             ]
 
-        if space_required is None or avg_rent_per_sqm is None:
-            if space_required is None and avg_rent_per_sqm is None:
-                explanations.append("Cannot calculate estimated rent: space_required and avg_rent_per_sqm are missing.")
-                return None, explanations
-            explanations.append("Cannot calculate estimated rent: missing required values.")
-            return None, explanations
-
-        estimated_rent = space_required * avg_rent_per_sqm
-        explanations.append(f"Estimated rent: {estimated_rent}")
-
         score = 0
         has_valid_comparison = False
 
-        if comfort_range[0] is not None and comfort_range[1] is not None:
-            has_valid_comparison = True
-            if estimated_rent <= comfort_range[0]:
-                score = 30
-                explanations.append("Rent is well within comfortable budget range.")
-            elif estimated_rent <= comfort_range[1]:
-                score = 25
-                explanations.append("Rent is within upper comfortable range.")
-            elif max_aff_rent is not None and estimated_rent <= max_aff_rent:
-                score = 15
-                explanations.append("Rent is affordable but tight.")
-            elif max_aff_rent is not None:
-                score = 5
-                explanations.append("Rent is above the maximum affordable (over budget).")
-            else:
-                score = 10
-                explanations.append("Rent calculated but max_affordable_rent missing. Partial score.")
-        elif max_aff_rent is not None:
-            has_valid_comparison = True
-            if estimated_rent <= max_aff_rent:
-                score = 20
-                explanations.append("Rent is within affordable range (comfortable range missing).")
-            else:
-                score = 5
-                explanations.append("Rent is above the maximum affordable (over budget).")
-        else:
-            explanations.append("Cannot compare rent: max_affordable_rent and comfortable_rent_range are missing.")
+        if space_required is not None and avg_rent_per_sqm is not None:
+            estimated_rent = space_required * avg_rent_per_sqm
+            explanations.append(f"Estimated rent: {estimated_rent}")
 
-        if not has_valid_comparison:
-            return None, explanations
+            if comfort_range[0] is not None and comfort_range[1] is not None:
+                has_valid_comparison = True
+                if estimated_rent <= comfort_range[0]:
+                    score = 30
+                    explanations.append("Rent is well within comfortable budget range.")
+                elif estimated_rent <= comfort_range[1]:
+                    score = 25
+                    explanations.append("Rent is within upper comfortable range.")
+                elif max_aff_rent is not None and estimated_rent <= max_aff_rent:
+                    score = 15
+                    explanations.append("Rent is affordable but tight.")
+                elif max_aff_rent is not None:
+                    score = 5
+                    explanations.append("Rent is above the maximum affordable (over budget).")
+                else:
+                    score = 10
+                    explanations.append("Rent calculated but max_affordable_rent missing. Partial score.")
+            elif max_aff_rent is not None:
+                has_valid_comparison = True
+                if estimated_rent <= max_aff_rent:
+                    score = 20
+                    explanations.append("Rent is within affordable range (comfortable range missing).")
+                else:
+                    score = 5
+                    explanations.append("Rent is above the maximum affordable (over budget).")
+            else:
+                explanations.append("Cannot compare rent: max_affordable_rent and comfortable_rent_range are missing.")
+        else:
+            if space_required is None:
+                explanations.append("Cannot calculate estimated rent: space_requirement_m2 is missing from brand.")
+            if avg_rent_per_sqm is None:
+                explanations.append("Cannot calculate estimated rent: avg_rent_per_sqm is missing from mall.")
+
+            if max_aff_rent is not None and avg_rent_per_sqm is not None:
+                has_valid_comparison = True
+                avg_price_context = avg_rent_per_sqm * 50
+                explanations.append(f"Using mall avg_rent_per_sqm ({avg_rent_per_sqm}) as price indicator.")
+                if avg_price_context <= max_aff_rent:
+                    score = 15
+                    explanations.append("Mall pricing appears affordable based on avg rent per sqm.")
+                else:
+                    score = 5
+                    explanations.append("Mall pricing may be high based on avg rent per sqm.")
 
         if income_stability is not None:
+            has_valid_comparison = True
             if income_stability >= 8:
                 score += 5
                 explanations.append("High income stability. Bonus points added.")
@@ -86,32 +113,38 @@ class BusinessMatchScorer:
         else:
             explanations.append("Income stability score missing. No stability bonus.")
 
+        if not has_valid_comparison:
+            return None, explanations
+
         return min(score, 35), explanations
 
     def score_tenant_mix(self) -> Tuple[Optional[int], List[str]]:
+        """
+        Score tenant mix and category fit (0-30 points).
+
+        Evaluates category oversaturation to avoid crowded categories.
+        Returns: (score, explanations)
+        """
         explanations = []
         op = self.brand.get("operational_profile", {})
-        req = self.brand.get("requirements", {})
         te = self.mall.get("tenant_ecosystem", {})
         cat = (op.get("category") or "").lower()
-        target_zones = set(req.get("target_zones", []))
-        available_zones = set(self.mall.get("zone_performance", {}).keys())
 
         category_percent = None
-        if "restaurant" in cat or "cafe" in cat:
+        if "restaurant" in cat or "cafe" in cat or "food" in cat or "giải trí" in cat:
             category_percent = safe_get_number(te, "food_percent")
             if category_percent is not None:
-                explanations.append(f"Category = food. Mall food_percent = {category_percent}%.")
-        elif "retail" in cat or "clothing" in cat:
+                explanations.append(f"Category = food/entertainment. Mall food_percent = {category_percent}%.")
+        elif "retail" in cat or "clothing" in cat or "shop" in cat:
             category_percent = safe_get_number(te, "shop_percent")
             if category_percent is not None:
                 explanations.append(f"Category = retail. Mall shop_percent = {category_percent}%.")
-        elif "service" in cat:
+        elif "service" in cat or "dịch vụ" in cat:
             category_percent = safe_get_number(te, "service_percent")
             if category_percent is not None:
                 explanations.append(f"Category = service. Mall service_percent = {category_percent}%.")
         else:
-            explanations.append("Unknown or other category. No oversaturation penalty.")
+            explanations.append(f"Category '{cat}' not explicitly matched. Applying neutral score.")
 
         score = 0
         has_valid_score = False
@@ -120,7 +153,7 @@ class BusinessMatchScorer:
             has_valid_score = True
             if category_percent < 25:
                 score = 25
-                explanations.append("Category is under-represented. Excellent tenant mix.")
+                explanations.append("Category is under-represented. Excellent tenant mix opportunity.")
             elif category_percent < 40:
                 score = 20
                 explanations.append("Category is balanced.")
@@ -135,73 +168,40 @@ class BusinessMatchScorer:
                 explanations.append("Category oversaturated.")
         else:
             if cat:
-                explanations.append("Category identified but percentage data missing. No category score.")
+                score = 15
+                has_valid_score = True
+                explanations.append(
+                    f"Category '{cat}' identified but mall percentage data missing. Neutral score applied."
+                )
             else:
-                explanations.append("Category not specified. No category score.")
+                score = 10
+                has_valid_score = True
+                explanations.append("Category not specified. Minimal baseline score applied.")
 
-        if target_zones and available_zones:
-            if target_zones & available_zones:
-                score += 5
-                explanations.append("Brand's target zone matches available booth zones.")
-            else:
-                explanations.append("No match between brand's target zones and available zones.")
-        else:
-            explanations.append("Zone preferences or available zones missing. No zone match score.")
-
-        if not has_valid_score and not (target_zones and available_zones):
-            return None, explanations
+        if not has_valid_score:
+            score = 10
+            has_valid_score = True
+            explanations.append("Minimal baseline score applied due to insufficient tenant mix data.")
 
         return min(score, 30), explanations
 
     def score_market_position(self) -> Tuple[Optional[int], List[str]]:
+        """
+        Score market position and demographics (0-20 points).
+
+        Evaluates mall type compatibility and occupancy health.
+        Returns: (score, explanations)
+        """
         explanations = []
-        op = self.brand.get("operational_profile", {})
         req = self.brand.get("requirements", {})
-        vp = self.mall.get("visitor_profile", {})
         te = self.mall.get("tenant_ecosystem", {})
         mp = self.mall.get("market_position", {})
-        spending_dist = vp.get("spending_power_distribution", {})
         mall_type = mp.get("mall_type", "")
-        brand_cat = (op.get("category") or "").lower()
         pm_types = set(req.get("preferred_mall_types", []))
         occupancy_rate = safe_get_number(te, "occupancy_rate")
 
         score = 0
         has_valid_score = False
-
-        if spending_dist:
-            premium_pct = safe_get_number(spending_dist, "premium")
-            mid_pct = safe_get_number(spending_dist, "mid_range")
-            budget_pct = safe_get_number(spending_dist, "budget")
-
-            if "luxury" in brand_cat or "premium" in brand_cat:
-                if premium_pct is not None:
-                    pct = premium_pct * 0.4
-                    score = int(pct)
-                    has_valid_score = True
-                    explanations.append(f"Brand is premium/luxury. Mall premium percent = {premium_pct}%.")
-                else:
-                    explanations.append("Brand is premium/luxury but premium percent missing.")
-            elif "mid" in brand_cat:
-                if mid_pct is not None:
-                    pct = mid_pct * 0.4
-                    score = int(pct)
-                    has_valid_score = True
-                    explanations.append(f"Brand is mid-range. Mall mid_range percent = {mid_pct}%.")
-                else:
-                    explanations.append("Brand is mid-range but mid_range percent missing.")
-            elif "budget" in brand_cat:
-                if budget_pct is not None:
-                    pct = budget_pct * 0.4
-                    score = int(pct)
-                    has_valid_score = True
-                    explanations.append(f"Brand is budget. Mall budget percent = {budget_pct}%.")
-                else:
-                    explanations.append("Brand is budget but budget percent missing.")
-            else:
-                explanations.append("Brand category not premium/mid/budget; spending power not scored.")
-        else:
-            explanations.append("Spending power distribution missing.")
 
         if mall_type:
             if pm_types and mall_type in pm_types:
@@ -211,9 +211,11 @@ class BusinessMatchScorer:
             else:
                 score += 5
                 has_valid_score = True
-                explanations.append("Mall type not preferred, neutral score.")
+                explanations.append("Mall type provided. Baseline score applied.")
         else:
-            explanations.append("Mall type missing. No mall type score.")
+            score += 3
+            has_valid_score = True
+            explanations.append("Mall type missing. Minimal baseline score applied.")
 
         if occupancy_rate is not None:
             has_valid_score = True
@@ -226,21 +228,31 @@ class BusinessMatchScorer:
             elif occupancy_rate > 50:
                 score += 1
                 explanations.append("Mall occupancy moderate (>50%).")
+            elif occupancy_rate >= 0:
+                score += 0
+                explanations.append(f"Mall has low occupancy ({occupancy_rate}%). No bonus.")
             else:
                 score -= 2
-                explanations.append("Mall struggling (<50% occupancy). Penalty applied.")
+                explanations.append("Mall struggling with negative indicators. Penalty applied.")
         else:
-            explanations.append("Occupancy rate missing. No occupancy bonus.")
+            explanations.append("Occupancy rate missing. No occupancy adjustment.")
 
         if not has_valid_score:
-            return None, explanations
+            score = 5
+            has_valid_score = True
+            explanations.append("Minimal baseline score applied due to insufficient data.")
 
         return min(score, 20), explanations
 
     def score_operational(self) -> Tuple[Optional[int], List[str]]:
+        """
+        Score operational compatibility (0-15 points).
+
+        Evaluates facility requirements matching.
+        Returns: (score, explanations)
+        """
         explanations = []
         req = self.brand.get("requirements", {})
-        op = self.brand.get("operational_profile", {})
         facilities = set(req.get("required_facilities", []))
         available = set(self.mall.get("facilities", []))
         facilities_matched = len(facilities & available)
@@ -252,40 +264,24 @@ class BusinessMatchScorer:
             score = int((facilities_matched / len(facilities)) * 10)
             explanations.append(f"Matched {facilities_matched} / {len(facilities)} required facilities.")
         else:
-            explanations.append("No facilities requirements provided.")
-
-        brand_hours = op.get("operating_hours", "")
-        peak_hours = self.mall.get("visitor_profile", {}).get("peak_hours", [])
-        overlap = False
-        if brand_hours and peak_hours:
-            try:
-                b_start, b_end = [int(t.replace(":", "")) for t in brand_hours.split("-")]
-                for hour in peak_hours:
-                    if is_valid_number(hour):
-                        hour_val = int(hour) * 100
-                        if b_start <= hour_val <= b_end:
-                            overlap = True
-                            break
-            except Exception:
-                pass
-
-        if overlap:
+            score = 5
             has_valid_score = True
-            score += 5
-            explanations.append("Brand's operating hours overlap mall peak hours. Full points.")
-        elif brand_hours or peak_hours:
-            has_valid_score = True
-            score += 2
-            explanations.append("No peak hour overlap or info; partial points.")
-        else:
-            explanations.append("Operating hours and peak hours missing. No hours score.")
+            explanations.append("No facilities requirements provided. Baseline score applied.")
 
         if not has_valid_score:
-            return None, explanations
+            score = 5
+            has_valid_score = True
+            explanations.append("Minimal baseline operational score applied.")
 
         return min(score, 15), explanations
 
     def score_location(self) -> Tuple[Optional[int], List[str]]:
+        """
+        Score location and accessibility (0-13 points).
+
+        Evaluates distance and accessibility features.
+        Returns: (score, explanations)
+        """
         explanations = []
         mp = self.mall.get("market_position", {})
         loc_dist = mp.get("location_distance", "")
@@ -321,7 +317,9 @@ class BusinessMatchScorer:
                 base = 1
                 explanations.append("Mall is far (>20km): poor location.")
         else:
-            explanations.append("Unknown location distance. No proximity points.")
+            base = 5
+            has_valid_score = True
+            explanations.append("Unknown location distance. Neutral baseline applied.")
 
         if acc_score is not None:
             has_valid_score = True
@@ -331,17 +329,31 @@ class BusinessMatchScorer:
             elif acc_score >= 6:
                 base += 2
                 explanations.append("Moderate accessibility score. +2 points.")
+            elif acc_score > 0:
+                base += 1
+                explanations.append("Basic accessibility provided. +1 point.")
             else:
-                explanations.append("Low accessibility; no bonus.")
+                explanations.append("Zero accessibility score. No bonus.")
         else:
-            explanations.append("Accessibility score missing. No accessibility bonus.")
+            explanations.append("Accessibility score missing. No accessibility adjustment.")
 
         if not has_valid_score:
-            return None, explanations
+            base = 5
+            has_valid_score = True
+            explanations.append("Minimal baseline location score applied.")
 
         return min(base, 13), explanations
 
     def compute_final_score(self) -> Dict[str, Any]:
+        """
+        Compute final compatibility score (0-100).
+
+        Aggregates all component scores, normalizes to 0-100 scale,
+        and applies adjustment factors (penalties/bonuses).
+
+        Returns:
+            Dictionary with final_score, component_scores, and explanations
+        """
         comp_scores = {}
         explanations = {}
         total = 0
