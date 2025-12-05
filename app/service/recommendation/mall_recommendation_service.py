@@ -30,6 +30,11 @@ class MallRecommendationService:
         mall_scores = self.batch_match_service.calculate_batch_scores(brand_id, all_mall_ids)
         mall_scores.sort(key=lambda x: x.get("final_score", 0), reverse=True)
 
+        api_logger.warn(
+            f"Scored {len(mall_scores)} malls for brand {brand_id}. "
+            f"Sample scores: {[{m.get('mall_id')[:8]: m.get('final_score')} for m in mall_scores[:3]]}"
+        )
+
         valid_mall_scores = [
             mall
             for mall in mall_scores
@@ -38,7 +43,11 @@ class MallRecommendationService:
         ]
 
         if not valid_mall_scores:
-            api_logger.warning(f"No compatible malls found for brand_id={brand_id}")
+            api_logger.warning(
+                f"No compatible malls found for brand_id={brand_id}. "
+                f"All {len(mall_scores)} malls returned NaN scores. "
+                f"Check mall demographics data quality."
+            )
             return []
 
         mall_ids = [mall.get("mall_id") for mall in valid_mall_scores]
@@ -49,14 +58,15 @@ class MallRecommendationService:
             mall_id = mall_score.get("mall_id")
             mall_detail = mall_details.get(mall_id, {})
 
+            final_score = mall_score.get("final_score", 0)
+            rounded_score = math.floor(final_score)
+
             scored_mall = {
                 "mall_id": mall_id,
                 "mall_name": mall_detail.get("mall_name"),
                 "mall_logo": mall_detail.get("mall_logo"),
                 "mall_address": mall_detail.get("mall_address"),
-                "final_score": mall_score.get("final_score", 0),
-                "component_scores": mall_score.get("component_scores"),
-                "explanations": mall_score.get("explanations"),
+                "final_score": rounded_score,
             }
             scored_malls.append(scored_mall)
 
