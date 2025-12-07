@@ -14,6 +14,161 @@ class BoothRepository:
     def __init__(self):
         pass
 
+    def get_brand_category_id(self, brand_id: str) -> Optional[str]:
+        db: Session = next(get_db())
+        try:
+            query = text(
+                """
+                SELECT categories_id
+                FROM platform_service.brand
+                WHERE brand_id = :brand_id
+                LIMIT 1
+                """
+            )
+            result = db.execute(query, {"brand_id": brand_id}).fetchone()
+            if result:
+                return result.categories_id
+            return None
+        except Exception as e:
+            log_access_message(
+                logger=api_logger,
+                log_level="error",
+                event_type="db_error",
+                entity_type="brand",
+                entity_id=brand_id,
+                message=str(e),
+                exc_info=True,
+            )
+            return None
+        finally:
+            db.close()
+
+    def get_available_booths_with_category_and_price(
+        self,
+        mall_ids: List[str],
+        min_size: Optional[float] = None,
+        max_size: Optional[float] = None,
+        preferred_floors: Optional[List[int]] = None,
+        size_tolerance: float = 0.2,
+    ) -> List[Dict[str, Any]]:
+        db: Session = next(get_db())
+        try:
+            placeholders = ",".join([f":mall_id_{i}" for i in range(len(mall_ids))])
+            query_parts = [
+                f"""
+                SELECT
+                    b.booth_id,
+                    b.name as booth_name,
+                    b.mall_id,
+                    b.size_m2,
+                    b.zone_id,
+                    b.floor_id,
+                    brp.rent_price,
+                    brp.is_current as price_is_current,
+                    m.name as mall_name,
+                    m.logo as mall_logo,
+                    m.address as mall_address,
+                    f.level as floor_level,
+                    z.categories_id as zone_categories_id,
+                    bi.frontage_width_m as frontage_width_m,
+                    asset.file_url as booth_image
+                FROM platform_service.booth b
+                LEFT JOIN platform_service.booth_rental_price brp
+                    ON b.booth_id = brp.booth_id
+                LEFT JOIN platform_service.zone z ON b.zone_id = z.zone_id
+                LEFT JOIN platform_service.floor f ON b.floor_id = f.floor_id
+                LEFT JOIN platform_service.booth_information bi ON b.booth_id = bi.booth_id
+                LEFT JOIN platform_service.mall m ON b.mall_id = m.mall_id
+                LEFT JOIN LATERAL (
+                    SELECT bva.file_url
+                    FROM platform_service.booth_visual_assets bva
+                    WHERE bva.booth_id = b.booth_id
+                    ORDER BY bva.display_order ASC NULLS LAST
+                    LIMIT 1
+                ) asset ON TRUE
+                WHERE b.is_available = true
+                    AND b.mall_id IN ({placeholders})
+            """
+            ]
+
+            params: Dict[str, Any] = {f"mall_id_{i}": mall_id for i, mall_id in enumerate(mall_ids)}
+
+            if min_size is not None:
+                min_size_decimal = Decimal(str(min_size))
+                tolerance_decimal = Decimal(str(size_tolerance))
+                min_size_with_tolerance = min_size_decimal * (Decimal("1") - tolerance_decimal)
+                query_parts.append("AND b.size_m2 >= :min_size")
+                params["min_size"] = float(min_size_with_tolerance)
+
+            if max_size is not None:
+                max_size_decimal = Decimal(str(max_size))
+                tolerance_decimal = Decimal(str(size_tolerance))
+                max_size_with_tolerance = max_size_decimal * (Decimal("1") + tolerance_decimal)
+                query_parts.append("AND b.size_m2 <= :max_size")
+                params["max_size"] = float(max_size_with_tolerance)
+
+            if preferred_floors is not None and len(preferred_floors) > 0:
+                floor_placeholders = ",".join([f":floor_{i}" for i in range(len(preferred_floors))])
+                query_parts.append(f"AND f.level IN ({floor_placeholders})")
+                for i, floor in enumerate(preferred_floors):
+                    params[f"floor_{i}"] = floor
+
+            query = text(" ".join(query_parts))
+
+            log_access_message(
+                logger=api_logger,
+                log_level="info",
+                event_type="db_query",
+                entity_type="booth",
+                message=f"Querying booths with category and price for {len(mall_ids)} malls",
+            )
+
+            results = db.execute(query, params).fetchall()
+
+            booths = []
+            for row in results:
+                booth = {
+                    "booth_id": row.booth_id,
+                    "booth_name": row.booth_name,
+                    "mall_id": row.mall_id,
+                    "size_m2": float(row.size_m2) if row.size_m2 else None,
+                    "zone_id": row.zone_id,
+                    "floor_id": row.floor_id,
+                    "rent_price": float(row.rent_price) if row.rent_price else None,
+                    "price_is_current": row.price_is_current if row.price_is_current else False,
+                    "mall_name": row.mall_name,
+                    "mall_logo": row.mall_logo,
+                    "mall_address": row.mall_address,
+                    "floor_level": row.floor_level,
+                    "zone_categories_id": row.zone_categories_id,
+                    "frontage_width_m": float(row.frontage_width_m) if row.frontage_width_m else None,
+                    "booth_image": row.booth_image,
+                }
+                booths.append(booth)
+
+            log_access_message(
+                logger=api_logger,
+                log_level="info",
+                event_type="db_found",
+                entity_type="booth",
+                message=f"Found {len(booths)} booths with category and price data",
+            )
+
+            return booths
+
+        except Exception as e:
+            log_access_message(
+                logger=api_logger,
+                log_level="error",
+                event_type="db_error",
+                entity_type="booth",
+                message=str(e),
+                exc_info=True,
+            )
+            return []
+        finally:
+            db.close()
+
     def get_available_booths_by_mall_ids(
         self,
         mall_ids: List[str],
