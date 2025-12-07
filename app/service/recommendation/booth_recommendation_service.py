@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -41,6 +41,69 @@ class BoothRecommendationService:
         finally:
             db.close()
 
+    def _check_category_match(
+        self,
+        brand_category_id: Optional[str],
+        booth_zone_category_id: Optional[str],
+    ) -> bool:
+        if brand_category_id is None or booth_zone_category_id is None:
+            return False
+        return brand_category_id == booth_zone_category_id
+
+    def _check_price_affordability(
+        self,
+        brand_meta: Dict[str, Any],
+        booth_price: Optional[float],
+    ) -> bool:
+        if booth_price is None:
+            return True
+
+        fc = brand_meta.get("financial_capacity", {})
+        max_affordable_rent = fc.get("max_affordable_rent")
+        comfort_range = fc.get("comfortable_rent_range")
+
+        if max_affordable_rent is not None:
+            try:
+                max_rent = float(max_affordable_rent)
+                if booth_price <= max_rent:
+                    return True
+            except (ValueError, TypeError):
+                pass
+
+        if comfort_range is not None and isinstance(comfort_range, list) and len(comfort_range) >= 2:
+            try:
+                upper_range = float(comfort_range[1])
+                if booth_price <= upper_range:
+                    return True
+            except (ValueError, TypeError):
+                pass
+
+        if max_affordable_rent is None and comfort_range is None:
+            return True
+
+        return False
+
+    def _sort_booths_by_priority(
+        self,
+        booths: List[Dict[str, Any]],
+        mall_scores_dict: Dict[str, float],
+    ) -> List[Dict[str, Any]]:
+        def sort_key(booth: Dict[str, Any]) -> Tuple[int, int, int, float]:
+            category_match = booth.get("_category_match", False)
+            price_affordable = booth.get("_price_affordable", False)
+            is_current = booth.get("_is_current", False)
+            mall_id = booth.get("mall_id")
+            mall_score = mall_scores_dict.get(mall_id, 0) if mall_id else 0
+
+            category_priority = 0 if category_match else 1
+            price_priority = 0 if price_affordable else 1
+            is_current_priority = 0 if is_current else 1
+            mall_score_negative = -mall_score
+
+            return (category_priority, price_priority, is_current_priority, mall_score_negative)
+
+        return sorted(booths, key=sort_key)
+
     async def get_recommended_booths(
         self,
         brand_id: str,
@@ -60,6 +123,8 @@ class BoothRecommendationService:
 
         brand_meta = brand_data.get("meta_data", brand_data)
 
+        brand_category_id = self.booth_repository.get_brand_category_id(brand_id)
+
         all_mall_ids = self._get_all_mall_ids()
         if not all_mall_ids:
             api_logger.warning("No malls found in database")
@@ -77,18 +142,10 @@ class BoothRecommendationService:
 
         mall_scores_dict = {mall.get("mall_id"): mall.get("final_score", 0) for mall in top_malls}
 
-        min_size = filters.get("min_size")
-        max_size = filters.get("max_size")
-        max_price = filters.get("max_price")
-        category_id = filters.get("category_id")
         preferred_floors = filters.get("preferred_floors")
 
-        booths = self.booth_repository.get_available_booths_by_mall_ids(
+        booths = self.booth_repository.get_available_booths_with_category_and_price(
             mall_ids=top_mall_ids,
-            min_size=min_size,
-            max_size=max_size,
-            max_price=max_price,
-            category_id=category_id,
             preferred_floors=preferred_floors,
         )
 
@@ -99,7 +156,7 @@ class BoothRecommendationService:
         booth_ids = [booth.get("booth_id") for booth in booths if booth.get("booth_id")]
         waitlist_status = self._check_waitlist_status(brand_id, booth_ids)
 
-        scored_booths = []
+        processed_booths = []
         for booth in booths:
             booth_id = booth.get("booth_id")
             mall_id = booth.get("mall_id")
@@ -115,11 +172,19 @@ class BoothRecommendationService:
                 scorer = BoothScorer(brand_meta, booth_for_scoring, mall_score)
                 result = scorer.compute_final_score()
 
-                scored_booth = {
+                zone_category_id = booth.get("zone_categories_id")
+                category_match = self._check_category_match(brand_category_id, zone_category_id)
+
+                booth_price = booth.get("rent_price")
+                price_affordable = self._check_price_affordability(brand_meta, booth_price)
+
+                is_current = booth.get("price_is_current", False)
+
+                processed_booth = {
                     "booth_id": booth.get("booth_id"),
                     "booth_name": booth.get("booth_name") or booth_for_scoring.get("name"),
                     "booth_size": booth.get("frontage_width_m") or booth_for_scoring.get("frontage_width_m"),
-                    "booth_price": booth.get("rent_price") or booth_for_scoring.get("rent_price"),
+                    "booth_price": booth_price or booth_for_scoring.get("rent_price"),
                     "booth_image": booth.get("booth_image") or booth_for_scoring.get("booth_image"),
                     "floor_level": booth.get("floor_level") or booth_for_scoring.get("floor_level"),
                     "mall_id": mall_id,
@@ -127,19 +192,25 @@ class BoothRecommendationService:
                     "mall_logo": booth.get("mall_logo") or booth_for_scoring.get("mall_logo"),
                     "mall_address": booth.get("mall_address") or booth_for_scoring.get("mall_address"),
                     "is_on_waitlist": waitlist_status.get(booth_id, False),
+                    "_category_match": category_match,
+                    "_price_affordable": price_affordable,
+                    "_is_current": is_current,
                     "_composite_score": result.get("composite_score", 0),
                 }
-                scored_booths.append(scored_booth)
+                processed_booths.append(processed_booth)
             except Exception as e:
                 api_logger.error(f"Error scoring booth {booth_id}: {str(e)}")
                 continue
 
-        scored_booths.sort(key=lambda x: x.get("_composite_score", 0), reverse=True)
+        sorted_booths = self._sort_booths_by_priority(processed_booths, mall_scores_dict)
 
-        for booth in scored_booths:
+        for booth in sorted_booths:
+            booth.pop("_category_match", None)
+            booth.pop("_price_affordable", None)
+            booth.pop("_is_current", None)
             booth.pop("_composite_score", None)
 
-        return scored_booths
+        return sorted_booths
 
     async def get_recommended_booths_by_mall(
         self,
