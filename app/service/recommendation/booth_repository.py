@@ -63,8 +63,8 @@ class BoothRepository:
                     b.size_m2,
                     b.zone_id,
                     b.floor_id,
-                    brp.rent_price,
-                    brp.is_current as price_is_current,
+                    current_price.rent_price,
+                    COALESCE(current_price.is_current, false) as price_is_current,
                     m.name as mall_name,
                     m.logo as mall_logo,
                     m.address as mall_address,
@@ -73,8 +73,13 @@ class BoothRepository:
                     bi.frontage_width_m as frontage_width_m,
                     asset.file_url as booth_image
                 FROM platform_service.booth b
-                LEFT JOIN platform_service.booth_rental_price brp
-                    ON b.booth_id = brp.booth_id
+                LEFT JOIN LATERAL (
+                    SELECT brp.rent_price, brp.is_current
+                    FROM platform_service.booth_rental_price brp
+                    WHERE brp.booth_id = b.booth_id
+                    ORDER BY brp.is_current DESC NULLS LAST, brp.effective_from DESC NULLS LAST
+                    LIMIT 1
+                ) current_price ON TRUE
                 LEFT JOIN platform_service.zone z ON b.zone_id = z.zone_id
                 LEFT JOIN platform_service.floor f ON b.floor_id = f.floor_id
                 LEFT JOIN platform_service.booth_information bi ON b.booth_id = bi.booth_id
