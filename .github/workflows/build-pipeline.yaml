@@ -30,7 +30,7 @@ env:
 
 jobs:
   tag-docker:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     name: Create Git Tag for Docker Image
     permissions:
       contents: write
@@ -57,7 +57,7 @@ jobs:
           create_annotated_tag: true
 
   build-system:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: tag-docker
     permissions:
       contents: read
@@ -128,3 +128,18 @@ jobs:
           echo "- Version: ${{ needs.tag-docker.outputs.new_tag }}" >> $GITHUB_STEP_SUMMARY
           echo "- Environment: ${{ steps.set-env.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "- Digest: ${{ steps.push.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
+
+  deploy:
+    runs-on: self-hosted
+    needs: build-system
+    steps:
+      - name: SSH Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          script: |
+            cd /home/admin/Capstone/phuc-capstone
+            docker compose pull landmall-python
+            docker compose up -d --force-recreate landmall-python

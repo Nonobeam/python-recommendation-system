@@ -69,6 +69,41 @@ class AISearchService:
             {"street": "đường Nguyễn Huệ", "district": "quận 10", "city": "Thành phố Hồ Chí Minh"}.
             Do not simply echo back the raw user text when building the criteria, but preserve the language.
 
+            IMPORTANT - NEARBY LOCATION INTELLIGENCE:
+            When users use proximity keywords like "gần" (near/nearby), "lân cận" (adjacent), "xung quanh" (around),
+            you should intelligently EXPAND the district search to include adjacent/nearby districts.
+
+            Ho Chi Minh City, Vietnam - Current District Adjacency Map (as of 2025):
+            NOTE: This represents the current administrative divisions of Ho Chi Minh City (Thành phố Hồ Chí Minh), Vietnam.
+            - Quận 1: neighboring districts are Quận 3, Quận 4, Quận 5, Quận Bình Thạnh
+            - Quận 2 (Thủ Đức): neighboring districts are Quận 1, Quận 9, Quận Bình Thạnh, Quận Thủ Đức
+            - Quận 3: neighboring districts are Quận 1, Quận 5, Quận 10, Quận Bình Thạnh, Quận Phú Nhuận
+            - Quận 4: neighboring districts are Quận 1, Quận 7, Quận 8
+            - Quận 5: neighboring districts are Quận 1, Quận 3, Quận 6, Quận 8, Quận 10, Quận 11
+            - Quận 6: neighboring districts are Quận 5, Quận 8, Quận 11, Quận Bình Tân
+            - Quận 7: neighboring districts are Quận 4, Quận 8, Huyện Nhà Bè
+            - Quận 8: neighboring districts are Quận 4, Quận 5, Quận 6, Quận 7, Huyện Bình Chánh
+            - Quận 9 (Thủ Đức): neighboring districts are Quận 2, Quận Thủ Đức, Huyện Dĩ An (Bình Dương)
+            - Quận 10: neighboring districts are Quận 3, Quận 5, Quận 11, Quận Tân Bình
+            - Quận 11: neighboring districts are Quận 5, Quận 6, Quận 10, Quận Tân Bình, Quận Tân Phú
+            - Quận 12: neighboring districts are Huyện Hóc Môn, Quận Tân Bình, Quận Gò Vấp
+            - Quận Bình Tân: neighboring districts are Quận 6, Quận Tân Phú, Huyện Bình Chánh
+            - Quận Bình Thạnh: neighboring districts are Quận 1, Quận 2, Quận 3, Quận Phú Nhuận, Quận Thủ Đức
+            - Quận Gò Vấp: neighboring districts are Quận 12, Quận Phú Nhuận, Quận Tân Bình, Quận Thủ Đức
+            - Quận Phú Nhuận: neighboring districts are Quận 3, Quận Bình Thạnh, Quận Gò Vấp, Quận Tân Bình
+            - Quận Tân Bình: neighboring districts are Quận 10, Quận 11, Quận 12, Quận Gò Vấp, Quận Phú Nhuận, Quận Tân Phú
+            - Quận Tân Phú: neighboring districts are Quận 11, Quận 12, Quận Bình Tân, Quận Tân Bình
+            - Quận Thủ Đức: neighboring districts are Quận 2, Quận 9, Quận Bình Thạnh, Quận Gò Vấp
+
+            Examples of nearby search expansion:
+            - Query: "trung tâm mua sắm gần quận 1"
+              → Extract: {"district": ["quận 1", "quận 3", "quận 4", "quận 5", "quận Bình Thạnh"], "general_search": "trung tâm mua sắm"}
+            - Query: "mall near district 7"
+              → Extract: {"district": ["quận 7", "quận 4", "quận 8", "huyện Nhà Bè"], "general_search": "mall"}
+            - Query: "lân cận quận Tân Bình"
+              → Extract: {"district": ["quận Tân Bình", "quận 10", "quận 11", "quận 12", "quận Gò Vấp",
+              "quận Phú Nhuận", "quận Tân Phú"], "general_search": ""}
+
             Available mall fields:
             - mall_name (string): Mall name
             - mall_type (string): Mall type (Premium, Standard, Outlet, etc.)
