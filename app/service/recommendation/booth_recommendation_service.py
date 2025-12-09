@@ -29,14 +29,20 @@ class BoothRecommendationService:
                 """
                 SELECT booth_id
                 FROM platform_service.brand_mall_waitlist
-                WHERE brand_id = :brand_id AND booth_id = ANY(:booth_ids)
+                WHERE brand_id = :brand_id AND booth_id IN :booth_ids
                 """
             )
-            results = db.execute(query, {"brand_id": brand_id, "booth_ids": booth_ids}).fetchall()
+            results = db.execute(query, {"brand_id": brand_id, "booth_ids": tuple(booth_ids)}).fetchall()
             waitlisted_booth_ids = {row.booth_id for row in results}
+
+            api_logger.debug(
+                f"Checked waitlist for brand {brand_id}: found {len(waitlisted_booth_ids)} booths in waitlist out of {len(booth_ids)} total"
+            )
+
             return {booth_id: booth_id in waitlisted_booth_ids for booth_id in booth_ids}
         except Exception as e:
-            api_logger.error(f"Error checking waitlist status: {str(e)}")
+            api_logger.error(f"Error checking waitlist status for brand {brand_id}: {str(e)}")
+
             return {booth_id: False for booth_id in booth_ids}
         finally:
             db.close()
