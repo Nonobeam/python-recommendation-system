@@ -63,6 +63,46 @@ class SearchService:
         finally:
             db.close()
 
+    def _check_rental_status(self, booth_ids: List[str]) -> Dict[str, bool]:
+        """
+        Check if booths are currently rented by looking for active rental_information records.
+
+        Args:
+            booth_ids: List of booth IDs to check rental status for
+
+        Returns:
+            Dictionary mapping booth_id to rental status (True if rented, False otherwise)
+        """
+        if not booth_ids:
+            return {}
+
+        db: Session = next(get_db())
+        try:
+            placeholders = ",".join([f":booth_id_{i}" for i in range(len(booth_ids))])
+            query = text(
+                f"""
+                SELECT DISTINCT ri.booth_id
+                FROM platform_service.rental_information ri
+                WHERE ri.booth_id IN ({placeholders})
+                AND ri.is_current = true
+            """
+            )
+
+            params = {f"booth_id_{i}": booth_id for i, booth_id in enumerate(booth_ids)}
+
+            results = db.execute(query, params).fetchall()
+            rented_booth_ids = {row.booth_id for row in results}
+
+            rental_map = {booth_id: booth_id in rented_booth_ids for booth_id in booth_ids}
+
+            return rental_map
+
+        except Exception as e:
+            api_logger.error(f"Error checking rental status: {str(e)}")
+            return {booth_id: False for booth_id in booth_ids}
+        finally:
+            db.close()
+
     async def search_booths(
         self,
         query: str,
@@ -100,6 +140,7 @@ class SearchService:
                 raw_results = results.get("results", [])
                 booth_ids = [booth.get("booth_id") for booth in raw_results if booth.get("booth_id")]
                 image_map = self._get_booth_images(booth_ids)
+                rental_map = self._check_rental_status(booth_ids)
 
                 formatted_results = []
                 for booth in raw_results:
@@ -108,6 +149,7 @@ class SearchService:
                     enriched_booth["mall_address"] = booth.get("mall_address") or booth.get("address")
                     booth_id = booth.get("booth_id")
                     enriched_booth["imageUrl"] = image_map.get(booth_id) if booth_id else None
+                    enriched_booth["is_rented"] = rental_map.get(booth_id, False) if booth_id else False
                     formatted_results.append(enriched_booth)
 
                 pagination_info = results.get("pagination") or {

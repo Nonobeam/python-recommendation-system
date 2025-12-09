@@ -47,6 +47,35 @@ class BoothRecommendationService:
         finally:
             db.close()
 
+    def _check_rental_status(self, booth_ids: List[str]) -> Dict[str, bool]:
+        """Check if booths are currently rented by looking for active rental_information records"""
+        if not booth_ids:
+            return {}
+
+        db: Session = next(get_db())
+        try:
+            query = text(
+                """
+                SELECT DISTINCT ri.booth_id
+                FROM platform_service.rental_information ri
+                WHERE ri.booth_id IN :booth_ids
+                AND ri.is_current = true
+                """
+            )
+            results = db.execute(query, {"booth_ids": tuple(booth_ids)}).fetchall()
+            rented_booth_ids = {row.booth_id for row in results}
+
+            api_logger.debug(
+                f"Checked rental status: found {len(rented_booth_ids)} rented booths out of {len(booth_ids)} total"
+            )
+
+            return {booth_id: booth_id in rented_booth_ids for booth_id in booth_ids}
+        except Exception as e:
+            api_logger.error(f"Error checking rental status: {str(e)}")
+            return {booth_id: False for booth_id in booth_ids}
+        finally:
+            db.close()
+
     def _check_category_match(
         self,
         brand_category_id: Optional[str],
@@ -161,6 +190,7 @@ class BoothRecommendationService:
 
         booth_ids = [booth.get("booth_id") for booth in booths if booth.get("booth_id")]
         waitlist_status = self._check_waitlist_status(brand_id, booth_ids)
+        rental_status = self._check_rental_status(booth_ids)
 
         processed_booths = []
         for booth in booths:
@@ -198,6 +228,7 @@ class BoothRecommendationService:
                     "mall_logo": booth.get("mall_logo") or booth_for_scoring.get("mall_logo"),
                     "mall_address": booth.get("mall_address") or booth_for_scoring.get("mall_address"),
                     "is_on_waitlist": waitlist_status.get(booth_id, False),
+                    "is_rented": rental_status.get(booth_id, False),
                     "_category_match": category_match,
                     "_price_affordable": price_affordable,
                     "_is_current": is_current,
@@ -273,6 +304,7 @@ class BoothRecommendationService:
 
         booth_ids = [booth.get("booth_id") for booth in booths if booth.get("booth_id")]
         waitlist_status = self._check_waitlist_status(brand_id, booth_ids)
+        rental_status = self._check_rental_status(booth_ids)
 
         scored_booths = []
         for booth in booths:
@@ -300,6 +332,7 @@ class BoothRecommendationService:
                     "mall_logo": booth.get("mall_logo") or booth_for_scoring.get("mall_logo"),
                     "mall_address": booth.get("mall_address") or booth_for_scoring.get("mall_address"),
                     "is_on_waitlist": waitlist_status.get(booth_id, False),
+                    "is_rented": rental_status.get(booth_id, False),
                     "_composite_score": result.get("composite_score", 0),
                 }
                 scored_booths.append(scored_booth)
