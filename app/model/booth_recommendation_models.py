@@ -27,6 +27,7 @@ class BoothRecommendationItem(BaseModel):
     mall_logo: Optional[str] = Field(None, description="Mall logo URL")
     mall_address: Optional[str] = Field(None, description="Mall address")
     is_on_waitlist: Optional[bool] = Field(None, description="Whether booth is in brand's waitlist")
+    is_rented: Optional[bool] = Field(None, description="Whether booth is currently rented")
 
 
 class BoothRecommendationResponse(BaseModel):
