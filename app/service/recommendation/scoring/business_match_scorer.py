@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional, Tuple
 
 from .score_calculator import apply_mall_adjustments, normalize_score
-from .scoring_utils import is_valid_number, safe_get_number
+from .scoring_utils import safe_get_number
 
 
 class BusinessMatchScorer:
@@ -189,56 +189,64 @@ class BusinessMatchScorer:
         """
         Score market position and demographics (0-20 points).
 
-        Evaluates mall type compatibility and occupancy health.
+        Evaluates occupancy health and competition level using demographics data.
         Returns: (score, explanations)
         """
         explanations = []
-        req = self.brand.get("requirements", {})
         te = self.mall.get("tenant_ecosystem", {})
         mp = self.mall.get("market_position", {})
-        mall_type = mp.get("mall_type", "")
-        pm_types = set(req.get("preferred_mall_types", []))
         occupancy_rate = safe_get_number(te, "occupancy_rate")
+        competition_nearby = safe_get_number(mp, "competition_nearby")
 
         score = 0
         has_valid_score = False
 
-        if mall_type:
-            if pm_types and mall_type in pm_types:
-                score += 10
-                has_valid_score = True
-                explanations.append("Mall type matches preferred types.")
-            else:
-                score += 5
-                has_valid_score = True
-                explanations.append("Mall type provided. Baseline score applied.")
-        else:
-            score += 3
-            has_valid_score = True
-            explanations.append("Mall type missing. Minimal baseline score applied.")
-
+        # Occupancy scoring (0-15 pts)
         if occupancy_rate is not None:
             has_valid_score = True
             if occupancy_rate > 85:
-                score += 5
+                score += 15
                 explanations.append("Mall is healthy (>85% occupancy).")
             elif occupancy_rate > 70:
-                score += 3
+                score += 12
                 explanations.append("Mall is stable (>70% occupancy).")
             elif occupancy_rate > 50:
-                score += 1
+                score += 8
                 explanations.append("Mall occupancy moderate (>50%).")
             elif occupancy_rate >= 0:
+                score += 4
+                explanations.append(f"Mall has low occupancy ({occupancy_rate}%). Minimal score.")
+            else:
+                score = 0
+                explanations.append("Mall struggling with negative indicators.")
+        else:
+            score = 8
+            has_valid_score = True
+            explanations.append("Occupancy rate missing. Baseline score applied.")
+
+        # Competition scoring (0-5 pts)
+        if competition_nearby is not None:
+            has_valid_score = True
+            if competition_nearby == 0:
+                score += 5
+                explanations.append("Unique location - no nearby competition. +5 points.")
+            elif competition_nearby == 1:
+                score += 4
+                explanations.append("Low competition (1 nearby mall). +4 points.")
+            elif competition_nearby <= 3:
+                score += 2
+                explanations.append(f"Moderate competition ({competition_nearby} nearby malls). +2 points.")
+            elif competition_nearby <= 5:
                 score += 0
-                explanations.append(f"Mall has low occupancy ({occupancy_rate}%). No bonus.")
+                explanations.append(f"High competition ({competition_nearby} nearby malls). No bonus.")
             else:
                 score -= 2
-                explanations.append("Mall struggling with negative indicators. Penalty applied.")
+                explanations.append(f"Very high competition ({competition_nearby} nearby malls). -2 penalty.")
         else:
-            explanations.append("Occupancy rate missing. No occupancy adjustment.")
+            explanations.append("Competition data missing. No competition adjustment.")
 
         if not has_valid_score:
-            score = 5
+            score = 10
             has_valid_score = True
             explanations.append("Minimal baseline score applied due to insufficient data.")
 
@@ -248,97 +256,51 @@ class BusinessMatchScorer:
         """
         Score operational compatibility (0-15 points).
 
-        Evaluates facility requirements matching.
+        Returns baseline score (no facility matching without requirements data).
         Returns: (score, explanations)
         """
         explanations = []
-        req = self.brand.get("requirements", {})
-        facilities = set(req.get("required_facilities", []))
-        available = set(self.mall.get("facilities", []))
-        facilities_matched = len(facilities & available)
-        score = 0
-        has_valid_score = False
-
-        if facilities:
-            has_valid_score = True
-            score = int((facilities_matched / len(facilities)) * 10)
-            explanations.append(f"Matched {facilities_matched} / {len(facilities)} required facilities.")
-        else:
-            score = 5
-            has_valid_score = True
-            explanations.append("No facilities requirements provided. Baseline score applied.")
-
-        if not has_valid_score:
-            score = 5
-            has_valid_score = True
-            explanations.append("Minimal baseline operational score applied.")
-
+        score = 10
+        explanations.append("Operational baseline score applied (facility matching not available).")
         return min(score, 15), explanations
 
     def score_location(self) -> Tuple[Optional[int], List[str]]:
         """
         Score location and accessibility (0-13 points).
 
-        Evaluates distance and accessibility features.
+        Evaluates accessibility features from demographics only.
         Returns: (score, explanations)
         """
         explanations = []
         mp = self.mall.get("market_position", {})
-        loc_dist = mp.get("location_distance", "")
         acc_score = safe_get_number(mp, "accessibility_score")
-        base = 0
+        base = 5  # Default baseline
         has_valid_score = False
-
-        km = None
-        if isinstance(loc_dist, (int, float)):
-            if is_valid_number(loc_dist):
-                km = float(loc_dist)
-        elif isinstance(loc_dist, str):
-            try:
-                if loc_dist.endswith("km"):
-                    km_val = float(loc_dist.replace("km", "").strip())
-                    if is_valid_number(km_val):
-                        km = km_val
-            except Exception:
-                pass
-
-        if km is not None:
-            has_valid_score = True
-            if km <= 5:
-                base = 10
-                explanations.append("Mall is within 5km: excellent proximity.")
-            elif km <= 10:
-                base = 7
-                explanations.append("Mall within 10km: good distance.")
-            elif km <= 20:
-                base = 4
-                explanations.append("Mall within 20km: fair distance.")
-            else:
-                base = 1
-                explanations.append("Mall is far (>20km): poor location.")
-        else:
-            base = 5
-            has_valid_score = True
-            explanations.append("Unknown location distance. Neutral baseline applied.")
 
         if acc_score is not None:
             has_valid_score = True
             if acc_score >= 8:
-                base += 3
-                explanations.append("High accessibility score. +3 points.")
+                base = 13
+                explanations.append("High accessibility score (>=8). Excellent location.")
             elif acc_score >= 6:
-                base += 2
-                explanations.append("Moderate accessibility score. +2 points.")
+                base = 10
+                explanations.append("Moderate accessibility score (>=6). Good location.")
+            elif acc_score >= 4:
+                base = 7
+                explanations.append("Fair accessibility score (>=4). Adequate location.")
             elif acc_score > 0:
-                base += 1
-                explanations.append("Basic accessibility provided. +1 point.")
+                base = 4
+                explanations.append("Low accessibility score. Limited location advantages.")
             else:
-                explanations.append("Zero accessibility score. No bonus.")
+                base = 2
+                explanations.append("No accessibility features. Poor location.")
         else:
-            explanations.append("Accessibility score missing. No accessibility adjustment.")
+            base = 7
+            has_valid_score = True
+            explanations.append("Accessibility score missing. Neutral baseline applied.")
 
         if not has_valid_score:
-            base = 5
+            base = 7
             has_valid_score = True
             explanations.append("Minimal baseline location score applied.")
 
