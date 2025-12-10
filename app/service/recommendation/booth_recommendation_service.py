@@ -59,7 +59,10 @@ class BoothRecommendationService:
                 SELECT DISTINCT ri.booth_id
                 FROM platform_service.rental_information ri
                 WHERE ri.booth_id IN :booth_ids
-                AND ri.is_current = true
+                AND ri.status = 'ACTIVE'
+                AND ri.contract_status != 'TERMINATED'
+                AND ri.starting_date <= CURRENT_DATE
+                AND ri.ending_date >= CURRENT_DATE
                 """
             )
             results = db.execute(query, {"booth_ids": tuple(booth_ids)}).fetchall()
