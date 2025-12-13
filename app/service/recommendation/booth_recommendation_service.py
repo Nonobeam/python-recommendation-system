@@ -126,19 +126,17 @@ class BoothRecommendationService:
         booths: List[Dict[str, Any]],
         mall_scores_dict: Dict[str, float],
     ) -> List[Dict[str, Any]]:
-        def sort_key(booth: Dict[str, Any]) -> Tuple[int, int, int, float]:
+        def sort_key(booth: Dict[str, Any]) -> Tuple[int, int, float]:
             category_match = booth.get("_category_match", False)
-            price_affordable = booth.get("_price_affordable", False)
             is_current = booth.get("_is_current", False)
             mall_id = booth.get("mall_id")
             mall_score = mall_scores_dict.get(mall_id, 0) if mall_id else 0
 
             category_priority = 0 if category_match else 1
-            price_priority = 0 if price_affordable else 1
             is_current_priority = 0 if is_current else 1
             mall_score_negative = -mall_score
 
-            return (category_priority, price_priority, is_current_priority, mall_score_negative)
+            return (category_priority, is_current_priority, mall_score_negative)
 
         return sorted(booths, key=sort_key)
 
@@ -195,8 +193,19 @@ class BoothRecommendationService:
         waitlist_status = self._check_waitlist_status(brand_id, booth_ids)
         rental_status = self._check_rental_status(booth_ids)
 
-        processed_booths = []
+        # Filter out booths that exceed price affordability
+        affordable_booths = []
         for booth in booths:
+            booth_price = booth.get("rent_price")
+            if self._check_price_affordability(brand_meta, booth_price):
+                affordable_booths.append(booth)
+            else:
+                api_logger.debug(
+                    f"Filtering out booth {booth.get('booth_id')} with price {booth_price} (exceeds brand budget)"
+                )
+
+        processed_booths = []
+        for booth in affordable_booths:
             booth_id = booth.get("booth_id")
             mall_id = booth.get("mall_id")
             mall_score = mall_scores_dict.get(mall_id, 0)
@@ -214,16 +223,13 @@ class BoothRecommendationService:
                 zone_category_id = booth.get("zone_categories_id")
                 category_match = self._check_category_match(brand_category_id, zone_category_id)
 
-                booth_price = booth.get("rent_price")
-                price_affordable = self._check_price_affordability(brand_meta, booth_price)
-
                 is_current = booth.get("price_is_current", False)
 
                 processed_booth = {
                     "booth_id": booth.get("booth_id"),
                     "booth_name": booth.get("booth_name") or booth_for_scoring.get("name"),
                     "booth_size": booth.get("frontage_width_m") or booth_for_scoring.get("frontage_width_m"),
-                    "booth_price": booth_price or booth_for_scoring.get("rent_price"),
+                    "booth_price": booth.get("rent_price") or booth_for_scoring.get("rent_price"),
                     "booth_image": booth.get("booth_image") or booth_for_scoring.get("booth_image"),
                     "floor_level": booth.get("floor_level") or booth_for_scoring.get("floor_level"),
                     "mall_id": mall_id,
@@ -233,7 +239,6 @@ class BoothRecommendationService:
                     "is_on_waitlist": waitlist_status.get(booth_id, False),
                     "is_rented": rental_status.get(booth_id, False),
                     "_category_match": category_match,
-                    "_price_affordable": price_affordable,
                     "_is_current": is_current,
                     "_composite_score": result.get("composite_score", 0),
                 }
@@ -246,7 +251,6 @@ class BoothRecommendationService:
 
         for booth in sorted_booths:
             booth.pop("_category_match", None)
-            booth.pop("_price_affordable", None)
             booth.pop("_is_current", None)
             booth.pop("_composite_score", None)
 
@@ -309,8 +313,19 @@ class BoothRecommendationService:
         waitlist_status = self._check_waitlist_status(brand_id, booth_ids)
         rental_status = self._check_rental_status(booth_ids)
 
-        scored_booths = []
+        # Filter out booths that exceed price affordability
+        affordable_booths = []
         for booth in booths:
+            booth_price = booth.get("rent_price")
+            if self._check_price_affordability(brand_meta, booth_price):
+                affordable_booths.append(booth)
+            else:
+                api_logger.debug(
+                    f"Filtering out booth {booth.get('booth_id')} in mall {mall_id} with price {booth_price} (exceeds brand budget)"
+                )
+
+        scored_booths = []
+        for booth in affordable_booths:
             booth_id = booth.get("booth_id")
 
             try:
