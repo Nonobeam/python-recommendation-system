@@ -48,7 +48,9 @@ async def extract_commission_details(
             "due_date": extraction["due_date"],
             "value": extraction["value"],
             "value_type": extraction["value_type"],
+            "payment_due_date": extraction["payment_due_date"],
         }
+        api_logger.info(f"Sending commission extraction response to Java: {response_data}")
         return success(response_data)
     except (GeminiAPIError, AIProcessingError) as exc:
         api_logger.error(f"Commission extraction failed: {str(exc)}")

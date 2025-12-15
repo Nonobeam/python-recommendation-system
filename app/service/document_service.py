@@ -20,44 +20,83 @@ load_dotenv()
 
 class CommissionExtractionService:
     def __init__(self):
+        import logging
+
+        logger = logging.getLogger("recommendation_system.document_service")
+
         self.api_key = os.getenv("GEMINI_API_KEY")
         if not self.api_key:
             raise MCPValidationError("GEMINI_API_KEY environment variable is required")
+        logger.info(f"Gemini API key loaded (length: {len(self.api_key)} chars)")
+
         self.model_name = os.getenv("GEMINI_DOCUMENT_MODEL", "gemini-2.0-flash")
+        logger.info(f"Using Gemini model: {self.model_name}")
+
         self.client = genai.Client(api_key=self.api_key)
+        logger.info("Gemini client initialized successfully")
         self.prompt = (
             "You extract structured data from Vietnamese commission contracts.\n"
             "Follow these exact instructions:\n"
             '1. Identify the first clause that contains the phrase ", từ ngày".\n'
-            '   - Capture the text that appears before ", từ ngày". Ignore headers like "ĐIỀU 2".\n'
+            '   - Capture the text that appears before ", từ ngày" in headers "ĐIỀU 2", focus on 2.1. \n'
             '   - Extract the date after "từ ngày" and before "đến ngày". Return as from_date.\n'
             '   - Extract the date after "đến ngày" and before the trailing period. Return as due_date.\n'
             '2. Find the commission clause that states "Bên A ... số tiền hoa hồng".\n'
             "   - Extract the numeric portion of the commission value.\n"
             '   - If the original text contains %, return value_type = "percentage" and remove the % sign.\n'
             '   - If the text is a fixed number (đồng), remove separators (., ,) and return value_type = "fixed_amount".\n'
-            "3. Always return well-formed JSON using this schema:\n"
+            "3. Find the payment due date clause (usually mentions between "
+            '"Thời hạn thanh toán tiền hoa hồng là" and '
+            '"kể từ ngày đầu tiên Khách thuê sử dụng gian hàng theo Hợp đồng thuê").\\n'
+            "   - Extract the number of days for payment (must be between 5 and 14 days).\n"
+            '   - Return as payment_due_date (just the number, without "ngày" or "days").\n'
+            "4. Always return well-formed JSON using this schema:\n"
             "{\n"
             '  "from_date": "dd/MM/yyyy",\n'
             '  "due_date": "dd/MM/yyyy",\n'
             '  "value": "<numeric_string>",\n'
-            '  "value_type": "percentage" | "fixed_amount"\n'
+            '  "value_type": "percentage" | "fixed_amount",\n'
+            '  "payment_due_date": "<number_of_days>"\n'
             "}\n"
             "Only return the JSON object. Do not include explanations or markdown."
         )
 
     async def extract_commission_details(self, file_bytes: bytes, mime_type: str) -> Dict[str, str]:
+        import logging
+        import traceback
+
+        logger = logging.getLogger("recommendation_system.document_service")
+
+        logger.info(
+            f"Starting Gemini commission extraction - Model: {self.model_name}, MIME type: {mime_type}, File size: {len(file_bytes)} bytes"
+        )
+
         try:
+            logger.debug("Calling Gemini API...")
             response = await asyncio.to_thread(
                 self.client.models.generate_content,
                 model=self.model_name,
                 contents=[types.Part.from_bytes(data=file_bytes, mime_type=mime_type), self.prompt],
             )
+            logger.info("Gemini API call completed successfully")
         except Exception as exc:
-            raise GeminiAPIError("Failed to complete Gemini commission extraction request") from exc
+            error_type = type(exc).__name__
+            error_msg = str(exc)
+            error_trace = traceback.format_exc()
+            logger.error(f"Gemini API call failed - Type: {error_type}, Message: {error_msg}")
+            logger.debug(f"Full traceback:\n{error_trace}")
+            raise GeminiAPIError(
+                f"Failed to complete Gemini commission extraction request - {error_type}: {error_msg}"
+            ) from exc
 
+        logger.debug("Extracting text from Gemini response...")
         response_text = self._extract_text_from_response(response)
-        return self._parse_extraction_result(response_text)
+        logger.info(f"Extracted response text (first 200 chars): {response_text[:200]}")
+
+        logger.debug("Parsing extraction result...")
+        result = self._parse_extraction_result(response_text)
+        logger.info(f"Successfully parsed commission data: {result}")
+        return result
 
     def _extract_text_from_response(self, response: Any) -> str:
         text_content = getattr(response, "text", None)
@@ -76,7 +115,7 @@ class CommissionExtractionService:
 
     def _parse_extraction_result(self, content: str) -> Dict[str, str]:
         payload = self._load_json_payload(content)
-        required_fields = ("from_date", "due_date", "value", "value_type")
+        required_fields = ("from_date", "due_date", "value", "value_type", "payment_due_date")
         for field in required_fields:
             if not payload.get(field):
                 raise AIProcessingError(f"Gemini output missing required field: {field}")
@@ -89,6 +128,7 @@ class CommissionExtractionService:
             "due_date": str(payload["due_date"]).strip(),
             "value": normalized_value,
             "value_type": normalized_value_type,
+            "payment_due_date": str(payload["payment_due_date"]).strip(),
         }
 
     def _load_json_payload(self, content: str) -> Dict[str, Any]:
