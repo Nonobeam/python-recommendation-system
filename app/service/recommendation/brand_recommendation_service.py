@@ -40,41 +40,32 @@ class BrandRecommendationService:
             api_logger.warning(f"Mall {mall_id} has no available booths")
             raise NoAvailableBoothsError(mall_id)
 
-        # Step 1: Get brand IDs first (needed for demographics query)
+        # Step 1: Get brand IDs (excluding brands with active rentals/requests for this mall)
         t0 = time.time()
-        brand_info_map = self.brand_repository.get_simple_brand_info_limited(limit)
+        brand_info_map = self.brand_repository.get_simple_brand_info_limited(limit, exclude_for_mall_id=mall_id)
         brand_ids_to_process = list(brand_info_map.keys())
         api_logger.info(
-            f"[PROFILE] Brand info fetch: {(time.time() - t0) * 1000:.2f}ms, count={len(brand_ids_to_process)}"
+            f"[PROFILE] Brand info fetch (with exclusions): {(time.time() - t0) * 1000:.2f}ms, "
+            f"count={len(brand_ids_to_process)}"
         )
 
         if not brand_ids_to_process:
-            api_logger.warning("No active brands found in database")
+            api_logger.warning("No active brands found in database (after exclusions)")
             return []
 
-        # Step 2: Run ALL remaining queries in PARALLEL (they don't depend on each other)
+        # Step 2: Run demographics queries in PARALLEL (they don't depend on each other)
         t1 = time.time()
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             mall_future = executor.submit(MallDemographicDataSource.get_by_id, mall_id)
             brand_demo_future = executor.submit(BrandDemographicDataSource.get_batch, brand_ids_to_process)
-            excluded_brands_future = executor.submit(self.mall_repository.get_excluded_brand_ids_for_mall, mall_id)
 
             mall_data = mall_future.result()
             brand_data_map = brand_demo_future.result()
-            excluded_brand_ids = excluded_brands_future.result()
 
         api_logger.info(
-            f"[PROFILE] Parallel fetch (mall demo + brand demo + exclusions): {(time.time() - t1) * 1000:.2f}ms, "
-            f"brands_loaded={len(brand_data_map)}, excluded={len(excluded_brand_ids)}"
+            f"[PROFILE] Parallel fetch (mall demo + brand demo): {(time.time() - t1) * 1000:.2f}ms, "
+            f"brands_loaded={len(brand_data_map)}"
         )
-
-        # Filter out excluded brands (brands with active rental requests or rental information)
-        if excluded_brand_ids:
-            original_count = len(brand_ids_to_process)
-            brand_ids_to_process = [bid for bid in brand_ids_to_process if bid not in excluded_brand_ids]
-            api_logger.info(
-                f"Filtered out {original_count - len(brand_ids_to_process)} brands with active rentals/requests"
-            )
 
         if not mall_data:
             raise DemographicsError(
