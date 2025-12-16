@@ -93,6 +93,7 @@ class BoothRepository:
                 ) asset ON TRUE
                 WHERE b.is_available = true
                     AND b.mall_id IN ({placeholders})
+                    AND m.status = 'ACTIVE'
             """
             ]
 
@@ -217,6 +218,7 @@ class BoothRepository:
                 ) asset ON TRUE
                 WHERE b.is_available = true
                     AND b.mall_id IN ({placeholders})
+                    AND m.status = 'ACTIVE'
             """
             ]
 
