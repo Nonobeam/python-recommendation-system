@@ -89,7 +89,6 @@ async def search_malls(
     except Exception as e:
         api_logger.error(f"Unexpected error in search for brand {x_br_key}: {str(e)}")
         from app.model.exception_mapper import map_exception_to_error_code
-        from app.model.response_helper import error
 
         error_code, message = map_exception_to_error_code(e)
         return error(error_code, message)
