@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, Body, Query
 from pydantic import BaseModel, Field
 
-from app.exception.recommendation_exceptions import DemographicsError, ScoreCalculationError
+from app.exception.recommendation_exceptions import DemographicsError, NoAvailableBoothsError, ScoreCalculationError
 from app.model.booth_recommendation_models import BoothRecommendationItem, BoothRecommendationResponse
 from app.model.brand_recommendation_models import BrandRecommendationItem, BrandRecommendationResponse
 from app.model.error_code import ErrorCode
@@ -428,6 +428,11 @@ async def get_recommended_brands(
         )
 
         return success(response_data.dict())
+
+    except NoAvailableBoothsError as e:
+        api_logger.warning(f"No available booths error: {str(e)}")
+        error_code, message = map_exception_to_error_code(e)
+        return error(error_code, message)
 
     except DemographicsError as e:
         api_logger.warning(f"Demographics error: {str(e)}")

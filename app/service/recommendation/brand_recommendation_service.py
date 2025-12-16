@@ -3,8 +3,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
-from app.exception.recommendation_exceptions import DemographicsError
+from app.exception.recommendation_exceptions import DemographicsError, NoAvailableBoothsError
 from app.service.recommendation.brand_repository import BrandRepositoryInstance
+from app.service.recommendation.mall_repository import MallRepositoryInstance
 from app.service.recommendation.repositories import BrandDemographicDataSource, MallDemographicDataSource
 from app.service.recommendation.scoring import BusinessMatchScorer
 from app.utils.logger import api_logger
@@ -16,6 +17,7 @@ MIN_RECOMMENDATION_SCORE = 40
 class BrandRecommendationService:
     def __init__(self):
         self.brand_repository = BrandRepositoryInstance
+        self.mall_repository = MallRepositoryInstance
 
     def get_recommended_brands(self, mall_id: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
@@ -27,8 +29,16 @@ class BrandRecommendationService:
 
         Returns:
             List of brands with score > 40 from the first `limit` brands processed
+
+        Raises:
+            NoAvailableBoothsError: If the mall has no available booths
         """
         total_start = time.time()
+
+        # Check if mall has available booths before processing
+        if not self.mall_repository.has_available_booths(mall_id):
+            api_logger.warning(f"Mall {mall_id} has no available booths")
+            raise NoAvailableBoothsError(mall_id)
 
         # Step 1: Get brand IDs first (needed for demographics query)
         t0 = time.time()
@@ -44,16 +54,27 @@ class BrandRecommendationService:
 
         # Step 2: Run ALL remaining queries in PARALLEL (they don't depend on each other)
         t1 = time.time()
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        with ThreadPoolExecutor(max_workers=3) as executor:
             mall_future = executor.submit(MallDemographicDataSource.get_by_id, mall_id)
             brand_demo_future = executor.submit(BrandDemographicDataSource.get_batch, brand_ids_to_process)
+            excluded_brands_future = executor.submit(self.mall_repository.get_excluded_brand_ids_for_mall, mall_id)
 
             mall_data = mall_future.result()
             brand_data_map = brand_demo_future.result()
+            excluded_brand_ids = excluded_brands_future.result()
 
         api_logger.info(
-            f"[PROFILE] Parallel fetch (mall demo + brand demo): {(time.time() - t1) * 1000:.2f}ms, brands_loaded={len(brand_data_map)}"
+            f"[PROFILE] Parallel fetch (mall demo + brand demo + exclusions): {(time.time() - t1) * 1000:.2f}ms, "
+            f"brands_loaded={len(brand_data_map)}, excluded={len(excluded_brand_ids)}"
         )
+
+        # Filter out excluded brands (brands with active rental requests or rental information)
+        if excluded_brand_ids:
+            original_count = len(brand_ids_to_process)
+            brand_ids_to_process = [bid for bid in brand_ids_to_process if bid not in excluded_brand_ids]
+            api_logger.info(
+                f"Filtered out {original_count - len(brand_ids_to_process)} brands with active rentals/requests"
+            )
 
         if not mall_data:
             raise DemographicsError(
