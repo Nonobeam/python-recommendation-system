@@ -1,24 +1,60 @@
 import math
+import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
 from app.exception.recommendation_exceptions import DemographicsError
-from app.service.recommendation.booth_filter_extractor import BoothFilterExtractor
-from app.service.recommendation.booth_repository import BoothRepositoryInstance
 from app.service.recommendation.brand_repository import BrandRepositoryInstance
 from app.service.recommendation.repositories import BrandDemographicDataSource, MallDemographicDataSource
-from app.service.recommendation.scoring import BoothScorer, BusinessMatchScorer
-from app.service.recommendation.scoring.score_calculator import calculate_brand_recommendation_score
+from app.service.recommendation.scoring import BusinessMatchScorer
 from app.utils.logger import api_logger
+
+# Minimum score threshold for a brand to be recommended
+MIN_RECOMMENDATION_SCORE = 40
 
 
 class BrandRecommendationService:
     def __init__(self):
         self.brand_repository = BrandRepositoryInstance
-        self.booth_repository = BoothRepositoryInstance
-        self.filter_extractor = BoothFilterExtractor()
 
-    async def get_recommended_brands(self, mall_id: str) -> List[Dict[str, Any]]:
-        mall_data = MallDemographicDataSource.get_by_id(mall_id)
+    def get_recommended_brands(self, mall_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get recommended brands for a mall.
+
+        Args:
+            mall_id: Mall identifier
+            limit: Number of brands to process (from API pageSize)
+
+        Returns:
+            List of brands with score > 40 from the first `limit` brands processed
+        """
+        total_start = time.time()
+
+        # Step 1: Get brand IDs first (needed for demographics query)
+        t0 = time.time()
+        brand_info_map = self.brand_repository.get_simple_brand_info_limited(limit)
+        brand_ids_to_process = list(brand_info_map.keys())
+        api_logger.info(
+            f"[PROFILE] Brand info fetch: {(time.time() - t0) * 1000:.2f}ms, count={len(brand_ids_to_process)}"
+        )
+
+        if not brand_ids_to_process:
+            api_logger.warning("No active brands found in database")
+            return []
+
+        # Step 2: Run ALL remaining queries in PARALLEL (they don't depend on each other)
+        t1 = time.time()
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            mall_future = executor.submit(MallDemographicDataSource.get_by_id, mall_id)
+            brand_demo_future = executor.submit(BrandDemographicDataSource.get_batch, brand_ids_to_process)
+
+            mall_data = mall_future.result()
+            brand_data_map = brand_demo_future.result()
+
+        api_logger.info(
+            f"[PROFILE] Parallel fetch (mall demo + brand demo): {(time.time() - t1) * 1000:.2f}ms, brands_loaded={len(brand_data_map)}"
+        )
+
         if not mall_data:
             raise DemographicsError(
                 entity_type="mall",
@@ -28,15 +64,12 @@ class BrandRecommendationService:
 
         mall_meta = mall_data.get("meta_data", mall_data)
 
-        all_brand_ids = self.brand_repository.get_all_active_brand_ids()
-        if not all_brand_ids:
-            api_logger.warning("No active brands found in database")
-            return []
-
+        t3 = time.time()
         scored_brands = []
-        for brand_id in all_brand_ids:
+
+        for brand_id in brand_ids_to_process:
             try:
-                brand_data = BrandDemographicDataSource.get_by_id(brand_id)
+                brand_data = brand_data_map.get(brand_id)
                 if not brand_data:
                     continue
 
@@ -49,75 +82,31 @@ class BrandRecommendationService:
                 if math.isnan(mall_compatibility_score) or mall_compatibility_score is None:
                     continue
 
-                filters = await self.filter_extractor.extract_filters_from_brand(brand_id)
+                # Only include brands with score > threshold
+                if mall_compatibility_score < MIN_RECOMMENDATION_SCORE:
+                    continue
 
-                min_size = filters.get("min_size")
-                max_size = filters.get("max_size")
-                max_price = filters.get("max_price")
-                category_id = filters.get("category_id")
-                preferred_floors = filters.get("preferred_floors")
+                rounded_final_score = math.floor(mall_compatibility_score)
 
-                booths = self.booth_repository.get_available_booths_by_mall_id(
-                    mall_id=mall_id,
-                    min_size=min_size,
-                    max_size=max_size,
-                    max_price=max_price,
-                    category_id=category_id,
-                    preferred_floors=preferred_floors,
-                )
-
-                available_booths_count = len(booths) if booths else 0
-
-                booth_match_score = None
-                best_booth_score = 0
-
-                if booths:
-                    for booth in booths:
-                        booth_id = booth.get("booth_id")
-                        try:
-                            booth_for_scoring = booth.copy()
-                            if booth_id:
-                                details = self.booth_repository.get_booth_with_details(booth_id)
-                                if details:
-                                    booth_for_scoring.update(details)
-
-                            booth_scorer = BoothScorer(brand_meta, booth_for_scoring, mall_compatibility_score)
-                            booth_result = booth_scorer.compute_final_score()
-                            composite_score = booth_result.get("composite_score", 0)
-
-                            if composite_score > best_booth_score:
-                                best_booth_score = composite_score
-                                booth_match_score = composite_score
-                        except Exception as e:
-                            api_logger.error(f"Error scoring booth {booth_id} for brand {brand_id}: {str(e)}")
-                            continue
-
-                final_score = calculate_brand_recommendation_score(
-                    mall_compatibility_score, booth_match_score, available_booths_count
-                )
-                rounded_final_score = math.floor(final_score)
+                # Get brand name/logo from already-fetched info
+                brand_info = brand_info_map.get(brand_id, {})
 
                 scored_brand = {
                     "brand_id": brand_id,
                     "final_score": rounded_final_score,
-                    "mall_compatibility_score": mall_compatibility_score,
-                    "booth_match_score": booth_match_score,
-                    "available_booths_count": available_booths_count,
+                    "brand_name": brand_info.get("brand_name"),
+                    "brand_logo": brand_info.get("brand_logo"),
                 }
                 scored_brands.append(scored_brand)
+
             except Exception as e:
                 api_logger.error(f"Error processing brand {brand_id}: {str(e)}")
                 continue
 
-        scored_brands.sort(key=lambda x: x.get("final_score", 0), reverse=True)
+        api_logger.info(f"[PROFILE] Scoring loop: {(time.time() - t3) * 1000:.2f}ms")
 
-        brand_ids = [brand.get("brand_id") for brand in scored_brands]
-        brand_details = self.brand_repository.get_brands_by_ids(brand_ids)
-
-        for scored_brand in scored_brands:
-            brand_id = scored_brand.get("brand_id")
-            brand_detail = brand_details.get(brand_id, {})
-            scored_brand["brand_name"] = brand_detail.get("brand_name")
-            scored_brand["brand_logo"] = brand_detail.get("brand_logo")
-
+        api_logger.info(
+            f"[PROFILE] TOTAL: {(time.time() - total_start) * 1000:.2f}ms, "
+            f"returned {len(scored_brands)} brands, processed {len(brand_ids_to_process)}"
+        )
         return scored_brands

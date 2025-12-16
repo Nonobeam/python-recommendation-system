@@ -412,22 +412,19 @@ async def get_recommended_brands(
             return error(ErrorCode.VALIDATION_ERROR, f"Invalid mallId format: {mallId}")
 
         service = BrandRecommendationService()
-        all_results = await service.get_recommended_brands(mallId)
+        # Pass pageSize as limit - service will return at most this many brands
+        results = service.get_recommended_brands(mallId, limit=pageSize)
 
-        total_results = len(all_results)
-        total_pages = (total_results + pageSize - 1) // pageSize if total_results > 0 else 0
-        start_idx = (pageNumber - 1) * pageSize
-        end_idx = start_idx + pageSize
-        paginated_results = all_results[start_idx:end_idx]
+        total_results = len(results)
 
         response_data = BrandRecommendationResponse(
             mall_id=mallId,
             total_results=total_results,
-            page=pageNumber,
+            page=1,  # Always page 1 with early-exit pagination
             page_size=pageSize,
-            total_pages=total_pages,
-            has_more=pageNumber < total_pages,
-            results=[BrandRecommendationItem(**item) for item in paginated_results],
+            total_pages=1 if total_results > 0 else 0,
+            has_more=False,  # Early-exit returns all qualifying brands up to limit
+            results=[BrandRecommendationItem(**item) for item in results],
         )
 
         return success(response_data.dict())

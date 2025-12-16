@@ -159,12 +159,42 @@ class PostgresDemographicRepository(DemographicRepository):
             db.close()
 
     def get_batch(self, entity_ids: List[str]) -> Dict[str, Dict[str, Any]]:
-        results = {}
-        for entity_id in entity_ids:
-            data = self.get_by_id(entity_id)
-            if data:
-                results[entity_id] = data
-        return results
+        """Fetch multiple demographics in a single SQL query."""
+        if not entity_ids:
+            return {}
+
+        db: Session = next(get_db())
+        try:
+            id_column = "brand_id" if "brand" in self.table_name else "mall_id"
+            placeholders = ", ".join([f":id_{i}" for i in range(len(entity_ids))])
+            query = text(
+                f"""
+                SELECT {id_column}, meta_data, created_at
+                FROM platform_service.{self.table_name}
+                WHERE {id_column} IN ({placeholders})
+            """
+            )
+
+            params = {f"id_{i}": eid for i, eid in enumerate(entity_ids)}
+            rows = db.execute(query, params).fetchall()
+
+            results = {}
+            for row in rows:
+                entity_id = getattr(row, id_column)
+                meta_data = row.meta_data
+                if isinstance(meta_data, str):
+                    meta_data = json.loads(meta_data)
+
+                results[entity_id] = {
+                    "meta_data": meta_data,
+                    "created_at": str(row.created_at),
+                }
+            return results
+        except Exception as e:
+            api_logger.error(f"Batch query error for {self.table_name}: {str(e)}")
+            return {}
+        finally:
+            db.close()
 
 
 class DemographicDataSource:
@@ -181,61 +211,16 @@ class DemographicDataSource:
         self.cache_misses = 0
 
     def get_by_id(self, entity_id: str) -> Optional[Dict[str, Any]]:
-        cached_data = self.redis_repo.get_by_id(entity_id)
-
-        if cached_data:
-            self.cache_hits += 1
-            log_access_message(
-                logger=api_logger,
-                log_level="debug",
-                event_type="cache_hit",
-                entity_type="entity",
-                entity_id=entity_id,
-            )
-            return cached_data
-
-        self.cache_misses += 1
-        log_access_message(
-            logger=api_logger,
-            log_level="info",
-            event_type="cache_miss",
-            entity_type="entity",
-            entity_id=entity_id,
-            message="Querying database...",
-        )
-        db_data = self.postgres_repo.get_by_id(entity_id)
-
-        if db_data:
-            log_access_message(
-                logger=api_logger,
-                log_level="info",
-                event_type="db_found",
-                entity_type="entity",
-                entity_id=entity_id,
-                message="Retrieved from database",
-            )
-            self.redis_repo.set(entity_id, db_data, ttl=self.cache_ttl)
-            return db_data
-
-        log_access_message(
-            logger=api_logger,
-            log_level="error",
-            event_type="not_found",
-            entity_type="entity",
-            entity_id=entity_id,
-            message="No data found in database",
-        )
-        return None
+        """Get entity by ID directly from DB (skip slow Redis cache)."""
+        return self.postgres_repo.get_by_id(entity_id)
 
     def get_batch(self, entity_ids: List[str]) -> Dict[str, Dict[str, Any]]:
-        results = {}
+        """Batch fetch entities directly from DB (skip cache for speed)."""
+        if not entity_ids:
+            return {}
 
-        for entity_id in entity_ids:
-            data = self.get_by_id(entity_id)
-            if data:
-                results[entity_id] = data
-
-        return results
+        # Skip cache - single DB query is faster than N cache round-trips
+        return self.postgres_repo.get_batch(entity_ids)
 
     def get_cache_stats(self) -> Dict[str, int]:
         return {
