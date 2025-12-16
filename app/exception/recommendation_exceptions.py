@@ -28,3 +28,14 @@ class DemographicsError(RecommendationError):
             super().__init__(message)
         else:
             super().__init__(f"Demographics calculation failed for {entity_type} '{entity_id}'")
+
+
+class NoAvailableBoothsError(RecommendationError):
+    """Exception raised when a mall has no available booths for brand recommendations"""
+
+    def __init__(self, mall_id: str, message: str = None):
+        self.mall_id = mall_id
+        if message:
+            super().__init__(message)
+        else:
+            super().__init__(f"Mall '{mall_id}' has no available booths for brand recommendations")
