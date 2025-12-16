@@ -37,7 +37,15 @@ if DB_SCHEMA:
 else:
     DATABASE_URL = base_url
 
-engine = create_engine(DATABASE_URL, echo=False, future=True)
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+    future=True,
+    pool_size=10,  # Keep 10 persistent connections
+    max_overflow=20,  # Allow 20 more connections on demand
+    pool_pre_ping=True,  # Check connection health before using
+    pool_recycle=300,  # Recycle connections every 5 minutes
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 Base = declarative_base()

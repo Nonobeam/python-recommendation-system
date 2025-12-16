@@ -838,18 +838,31 @@ class ElasticsearchService:
 elasticsearch_service = ElasticsearchService()
 
 
-def startup_elasticsearch_check() -> bool:
-    """Startup check for Elasticsearch connection"""
+def startup_elasticsearch_check(connection_string: str = None) -> bool:
+    """Startup check for Elasticsearch connection
+
+    Args:
+        connection_string: Optional connection URL (e.g., 'http://localhost:9200').
+                          If not provided, uses environment variables.
+    """
     elasticsearch_logger.info("Checking Elasticsearch connection...")
 
     try:
         from elasticsearch import Elasticsearch
 
-        host = os.getenv("ELASTICSEARCH_HOST", "localhost")
-        port = int(os.getenv("ELASTICSEARCH_PORT", 9200))
-        protocol = os.getenv("ELASTICSEARCH_PROTOCOL", "http")
-
-        url = f"{protocol}://{host}:{port}"
+        if connection_string:
+            # Parse connection string to extract protocol, host, and port
+            url = connection_string
+            # Extract protocol, host, port from connection string for logging
+            if "://" in connection_string:
+                protocol = connection_string.split("://")[0]
+            else:
+                protocol = "http"
+        else:
+            host = os.getenv("ELASTICSEARCH_HOST", "localhost")
+            port = int(os.getenv("ELASTICSEARCH_PORT", 9200))
+            protocol = os.getenv("ELASTICSEARCH_PROTOCOL", "http")
+            url = f"{protocol}://{host}:{port}"
 
         client_params = {"hosts": [url]}
 

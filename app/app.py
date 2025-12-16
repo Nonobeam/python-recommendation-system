@@ -13,9 +13,15 @@ def startup_checks():
         app_logger.warning("Redis connection failed - service may not work properly")
         return False
 
-    if not startup_elasticsearch_check():
+    # Build Elasticsearch connection string from environment variables
+    es_host = os.getenv("ELASTICSEARCH_HOST", "localhost")
+    es_port = os.getenv("ELASTICSEARCH_PORT", "9200")
+    es_protocol = os.getenv("ELASTICSEARCH_PROTOCOL", "http")
+    connection = f"{es_protocol}://{es_host}:{es_port}"
+
+    if not startup_elasticsearch_check(connection):
         app_logger.warning("Elasticsearch connection failed - search features will be unavailable")
-        app_logger.info("Make sure Elasticsearch is running on http://localhost:9200")
+        app_logger.info("Make sure Elasticsearch is running on " + connection)
         return False
 
     app_logger.info("All startup checks passed")
