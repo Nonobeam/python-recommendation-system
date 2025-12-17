@@ -104,7 +104,7 @@ class PostgresDemographicRepository(DemographicRepository):
             query = text(
                 f"""
                 SELECT meta_data, created_at
-                FROM platform_service.{self.table_name}
+                FROM {self.table_name}
                 WHERE {id_column} = :entity_id
                 LIMIT 1
             """
@@ -170,7 +170,7 @@ class PostgresDemographicRepository(DemographicRepository):
             query = text(
                 f"""
                 SELECT {id_column}, meta_data, created_at
-                FROM platform_service.{self.table_name}
+                FROM {self.table_name}
                 WHERE {id_column} IN ({placeholders})
             """
             )

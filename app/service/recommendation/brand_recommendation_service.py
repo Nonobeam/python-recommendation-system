@@ -3,14 +3,14 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
+from app.datastore.brand_repository import BrandRepositoryInstance
+from app.datastore.mall_repository import MallRepositoryInstance
+from app.datastore.repositories import BrandDemographicDataSource, MallDemographicDataSource
 from app.exception.recommendation_exceptions import (
     DemographicsError,
     NoActiveCommissionContractError,
     NoAvailableBoothsError,
 )
-from app.service.recommendation.brand_repository import BrandRepositoryInstance
-from app.service.recommendation.mall_repository import MallRepositoryInstance
-from app.service.recommendation.repositories import BrandDemographicDataSource, MallDemographicDataSource
 from app.service.recommendation.scoring import BusinessMatchScorer
 from app.utils.logger import api_logger
 

@@ -20,7 +20,7 @@ class BoothRepository:
             query = text(
                 """
                 SELECT categories_id
-                FROM platform_service.brand
+                FROM brand
                 WHERE brand_id = :brand_id
                 LIMIT 1
                 """
@@ -72,21 +72,21 @@ class BoothRepository:
                     z.categories_id as zone_categories_id,
                     bi.frontage_width_m as frontage_width_m,
                     asset.file_url as booth_image
-                FROM platform_service.booth b
+                FROM booth b
                 LEFT JOIN LATERAL (
                     SELECT brp.rent_price, brp.is_current
-                    FROM platform_service.booth_rental_price brp
+                    FROM booth_rental_price brp
                     WHERE brp.booth_id = b.booth_id
                     ORDER BY brp.is_current DESC NULLS LAST, brp.effective_from DESC NULLS LAST
                     LIMIT 1
                 ) current_price ON TRUE
-                LEFT JOIN platform_service.zone z ON b.zone_id = z.zone_id
-                LEFT JOIN platform_service.floor f ON b.floor_id = f.floor_id
-                LEFT JOIN platform_service.booth_information bi ON b.booth_id = bi.booth_id
-                LEFT JOIN platform_service.mall m ON b.mall_id = m.mall_id
+                LEFT JOIN zone z ON b.zone_id = z.zone_id
+                LEFT JOIN floor f ON b.floor_id = f.floor_id
+                LEFT JOIN booth_information bi ON b.booth_id = bi.booth_id
+                LEFT JOIN mall m ON b.mall_id = m.mall_id
                 LEFT JOIN LATERAL (
                     SELECT bva.file_url
-                    FROM platform_service.booth_visual_assets bva
+                    FROM booth_visual_assets bva
                     WHERE bva.booth_id = b.booth_id
                     ORDER BY bva.display_order ASC NULLS LAST
                     LIMIT 1
@@ -202,16 +202,16 @@ class BoothRepository:
                     f.level as floor_level,
                     bi.frontage_width_m as frontage_width_m,
                     asset.file_url as booth_image
-                FROM platform_service.booth b
-                LEFT JOIN platform_service.booth_rental_price brp
+                FROM booth b
+                LEFT JOIN booth_rental_price brp
                     ON b.booth_id = brp.booth_id AND brp.is_current = true
-                LEFT JOIN platform_service.zone z ON b.zone_id = z.zone_id
-                LEFT JOIN platform_service.floor f ON b.floor_id = f.floor_id
-                LEFT JOIN platform_service.booth_information bi ON b.booth_id = bi.booth_id
-                LEFT JOIN platform_service.mall m ON b.mall_id = m.mall_id
+                LEFT JOIN zone z ON b.zone_id = z.zone_id
+                LEFT JOIN floor f ON b.floor_id = f.floor_id
+                LEFT JOIN booth_information bi ON b.booth_id = bi.booth_id
+                LEFT JOIN mall m ON b.mall_id = m.mall_id
                 LEFT JOIN LATERAL (
                     SELECT bva.file_url
-                    FROM platform_service.booth_visual_assets bva
+                    FROM booth_visual_assets bva
                     WHERE bva.booth_id = b.booth_id
                     ORDER BY bva.display_order ASC NULLS LAST
                     LIMIT 1
@@ -378,14 +378,14 @@ class BoothRepository:
                     z.categories_id,
                     f.level as floor_level,
                     m.name as mall_name
-                FROM platform_service.booth b
-                LEFT JOIN platform_service.booth_rental_price brp
+                FROM booth b
+                LEFT JOIN booth_rental_price brp
                     ON b.booth_id = brp.booth_id AND brp.is_current = true
-                LEFT JOIN platform_service.booth_information bi
+                LEFT JOIN booth_information bi
                     ON b.booth_id = bi.booth_id
-                LEFT JOIN platform_service.zone z ON b.zone_id = z.zone_id
-                LEFT JOIN platform_service.floor f ON b.floor_id = f.floor_id
-                LEFT JOIN platform_service.mall m ON b.mall_id = m.mall_id
+                LEFT JOIN zone z ON b.zone_id = z.zone_id
+                LEFT JOIN floor f ON b.floor_id = f.floor_id
+                LEFT JOIN mall m ON b.mall_id = m.mall_id
                 WHERE b.booth_id = :booth_id
                 LIMIT 1
             """

@@ -4,10 +4,10 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config.db import get_db
+from app.datastore.booth_repository import BoothRepositoryInstance
+from app.datastore.repositories import BrandDemographicDataSource, MallDemographicDataSource
 from app.exception.recommendation_exceptions import DemographicsError
 from app.service.recommendation.booth_filter_extractor import BoothFilterExtractor
-from app.service.recommendation.booth_repository import BoothRepositoryInstance
-from app.service.recommendation.repositories import BrandDemographicDataSource, MallDemographicDataSource
 from app.service.recommendation.scoring import BoothScorer
 from app.service.recommendation.services import BatchMatchService
 from app.utils.logger import api_logger

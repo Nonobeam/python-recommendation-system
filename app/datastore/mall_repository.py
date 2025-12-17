@@ -25,7 +25,7 @@ class MallRepository:
           m.name as mall_name,
           m.logo as mall_logo,
           m.address as mall_address
-        FROM platform_service.mall m
+        FROM mall m
         WHERE m.mall_id IN ({placeholders})
           AND m.status = 'ACTIVE'
       """
@@ -70,7 +70,7 @@ class MallRepository:
     def get_all_active_mall_ids(self) -> List[str]:
         db: Session = next(get_db())
         try:
-            query = text("SELECT mall_id FROM platform_service.mall WHERE status = 'ACTIVE'")
+            query = text("SELECT mall_id FROM mall WHERE status = 'ACTIVE'")
             results = db.execute(query).fetchall()
             return [row.mall_id for row in results]
         except Exception as e:
@@ -94,7 +94,7 @@ class MallRepository:
             query = text(
                 """
                 SELECT EXISTS(
-                    SELECT 1 FROM platform_service.booth
+                    SELECT 1 FROM booth
                     WHERE mall_id = :mall_id
                     AND status = 'ACTIVE'
                     AND is_available = true
@@ -130,8 +130,8 @@ class MallRepository:
             rental_request_query = text(
                 """
                 SELECT DISTINCT brr.brand_id
-                FROM platform_service.booth_rental_request brr
-                JOIN platform_service.booth b ON brr.booth_id = b.booth_id
+                FROM booth_rental_request brr
+                JOIN booth b ON brr.booth_id = b.booth_id
                 WHERE b.mall_id = :mall_id
                 AND brr.status = 'ACTIVE'
             """
@@ -141,8 +141,8 @@ class MallRepository:
             rental_info_query = text(
                 """
                 SELECT DISTINCT ri.brand_id
-                FROM platform_service.rental_information ri
-                JOIN platform_service.booth b ON ri.booth_id = b.booth_id
+                FROM rental_information ri
+                JOIN booth b ON ri.booth_id = b.booth_id
                 WHERE b.mall_id = :mall_id
                 AND ri.status = 'ACTIVE'
             """
@@ -188,7 +188,7 @@ class MallRepository:
             query = text(
                 """
                 SELECT EXISTS(
-                    SELECT 1 FROM platform_service.commission_contract
+                    SELECT 1 FROM commission_contract
                     WHERE mall_id = :mall_id
                     AND status = 'ACTIVE'
                     AND ending_date >= CURRENT_DATE

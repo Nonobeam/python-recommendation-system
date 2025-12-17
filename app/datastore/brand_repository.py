@@ -14,7 +14,7 @@ class BrandRepository:
     def get_all_active_brand_ids(self) -> List[str]:
         db: Session = next(get_db())
         try:
-            query = text("SELECT brand_id FROM platform_service.brand WHERE status = 'ACTIVE'")
+            query = text("SELECT brand_id FROM brand WHERE status = 'ACTIVE'")
             results = db.execute(query).fetchall()
             return [row.brand_id for row in results]
         except Exception as e:
@@ -27,7 +27,7 @@ class BrandRepository:
         """Get only `limit` active brand IDs from the database."""
         db: Session = next(get_db())
         try:
-            query = text("SELECT brand_id FROM platform_service.brand WHERE status = 'ACTIVE' LIMIT :limit")
+            query = text("SELECT brand_id FROM brand WHERE status = 'ACTIVE' LIMIT :limit")
             results = db.execute(query, {"limit": limit}).fetchall()
             return [row.brand_id for row in results]
         except Exception as e:
@@ -51,24 +51,30 @@ class BrandRepository:
         try:
             query = text(
                 """
-                SELECT b.brand_id, b.name as brand_name, b.logo as brand_logo
-                FROM platform_service.brand b
+                SELECT b.brand_id, b.name AS brand_name, b.logo AS brand_logo
+                FROM brand b
                 WHERE b.status = 'ACTIVE'
-                  AND NOT EXISTS (SELECT 1
-                                  FROM platform_service.booth_rental_request brr
-                                           JOIN platform_service.booth booth ON brr.booth_id = booth.booth_id
-                                  WHERE brr.brand_id = b.brand_id
-                                    AND booth.mall_id = :mall_id
-                                    AND brr.status = 'ACTIVE')
-                  AND NOT EXISTS (SELECT 1
-                                  FROM platform_service.rental_information ri
-                                           JOIN platform_service.booth booth ON ri.booth_id = booth.booth_id
-                                  WHERE ri.brand_id = b.brand_id
-                                    AND booth.mall_id = :mall_id
-                                    AND ri.status = 'ACTIVE'
-                                    AND ri.contract_status <> 'TERMINATED'
-                                    AND CURRENT_DATE BETWEEN ri.starting_date AND ri.ending_date)
-                    LIMIT :limit
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM booth_rental_request brr
+                    JOIN booth booth
+                        ON brr.booth_id = booth.booth_id
+                    WHERE brr.brand_id = b.brand_id
+                        AND booth.mall_id = :mall_id
+                        AND brr.status = 'ACTIVE'
+                )
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM rental_information ri
+                    JOIN booth booth
+                        ON ri.booth_id = booth.booth_id
+                    WHERE ri.brand_id = b.brand_id
+                        AND booth.mall_id = :mall_id
+                        AND ri.status = 'ACTIVE'
+                        AND ri.contract_status IS DISTINCT FROM 'TERMINATED'
+                        AND CURRENT_DATE BETWEEN ri.starting_date AND ri.ending_date
+                )
+                LIMIT :limit;
                 """
             )
             results = db.execute(query, {"limit": limit, "mall_id": exclude_for_mall_id}).fetchall()
@@ -100,7 +106,7 @@ class BrandRepository:
           b.brand_id,
           b.name as brand_name,
           b.logo as brand_logo
-        FROM platform_service.brand b
+        FROM brand b
         WHERE b.brand_id IN ({placeholders})
           AND b.status = 'ACTIVE'
       """

@@ -1,9 +1,9 @@
 import math
 from typing import Any, Dict, List
 
+from app.datastore.mall_repository import MallRepositoryInstance
+from app.datastore.repositories import BrandDemographicDataSource
 from app.exception.recommendation_exceptions import DemographicsError
-from app.service.recommendation.mall_repository import MallRepositoryInstance
-from app.service.recommendation.repositories import BrandDemographicDataSource
 from app.service.recommendation.services import BatchMatchService
 from app.utils.logger import api_logger
 
