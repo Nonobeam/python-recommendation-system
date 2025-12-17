@@ -173,5 +173,36 @@ class MallRepository:
         finally:
             db.close()
 
+    def has_active_commission_contract(self, mall_id: str) -> bool:
+        """
+        Check if a mall has an active commission contract.
+
+        Args:
+            mall_id: Mall identifier
+
+        Returns:
+            True if the mall has at least one active commission contract with ending_date >= today
+        """
+        db: Session = next(get_db())
+        try:
+            query = text(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM platform_service.commission_contract
+                    WHERE mall_id = :mall_id
+                    AND status = 'ACTIVE'
+                    AND ending_date >= CURRENT_DATE
+                    LIMIT 1
+                ) as has_contract
+            """
+            )
+            result = db.execute(query, {"mall_id": mall_id}).fetchone()
+            return result.has_contract if result else False
+        except Exception as e:
+            api_logger.error(f"Error checking commission contract for mall {mall_id}: {str(e)}")
+            return False
+        finally:
+            db.close()
+
 
 MallRepositoryInstance = MallRepository()

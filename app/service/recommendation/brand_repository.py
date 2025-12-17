@@ -49,42 +49,29 @@ class BrandRepository:
         """
         db: Session = next(get_db())
         try:
-            if exclude_for_mall_id:
-                # Query with exclusion logic using NOT EXISTS
-                query = text(
-                    """
-                    SELECT b.brand_id, b.name as brand_name, b.logo as brand_logo
-                    FROM platform_service.brand b
-                    WHERE b.status = 'ACTIVE'
-                    AND NOT EXISTS (
-                        SELECT 1 FROM platform_service.booth_rental_request brr
-                        JOIN platform_service.booth booth ON brr.booth_id = booth.booth_id
-                        WHERE brr.brand_id = b.brand_id
-                        AND booth.mall_id = :mall_id
-                        AND brr.status = 'ACTIVE'
-                    )
-                    AND NOT EXISTS (
-                        SELECT 1 FROM platform_service.rental_information ri
-                        JOIN platform_service.booth booth ON ri.booth_id = booth.booth_id
-                        WHERE ri.brand_id = b.brand_id
-                        AND booth.mall_id = :mall_id
-                        AND ri.status = 'ACTIVE'
-                    )
+            query = text(
+                """
+                SELECT b.brand_id, b.name as brand_name, b.logo as brand_logo
+                FROM platform_service.brand b
+                WHERE b.status = 'ACTIVE'
+                  AND NOT EXISTS (SELECT 1
+                                  FROM platform_service.booth_rental_request brr
+                                           JOIN platform_service.booth booth ON brr.booth_id = booth.booth_id
+                                  WHERE brr.brand_id = b.brand_id
+                                    AND booth.mall_id = :mall_id
+                                    AND brr.status = 'ACTIVE')
+                  AND NOT EXISTS (SELECT 1
+                                  FROM platform_service.rental_information ri
+                                           JOIN platform_service.booth booth ON ri.booth_id = booth.booth_id
+                                  WHERE ri.brand_id = b.brand_id
+                                    AND booth.mall_id = :mall_id
+                                    AND ri.status = 'ACTIVE'
+                                    AND ri.contract_status <> 'TERMINATED'
+                                    AND CURRENT_DATE BETWEEN ri.starting_date AND ri.ending_date)
                     LIMIT :limit
                 """
-                )
-                results = db.execute(query, {"limit": limit, "mall_id": exclude_for_mall_id}).fetchall()
-            else:
-                # Simple query without exclusion
-                query = text(
-                    """
-                    SELECT brand_id, name as brand_name, logo as brand_logo
-                    FROM platform_service.brand
-                    WHERE status = 'ACTIVE'
-                    LIMIT :limit
-                """
-                )
-                results = db.execute(query, {"limit": limit}).fetchall()
+            )
+            results = db.execute(query, {"limit": limit, "mall_id": exclude_for_mall_id}).fetchall()
 
             brands = {}
             for row in results:

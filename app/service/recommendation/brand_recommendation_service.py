@@ -3,7 +3,11 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
-from app.exception.recommendation_exceptions import DemographicsError, NoAvailableBoothsError
+from app.exception.recommendation_exceptions import (
+    DemographicsError,
+    NoActiveCommissionContractError,
+    NoAvailableBoothsError,
+)
 from app.service.recommendation.brand_repository import BrandRepositoryInstance
 from app.service.recommendation.mall_repository import MallRepositoryInstance
 from app.service.recommendation.repositories import BrandDemographicDataSource, MallDemographicDataSource
@@ -34,6 +38,11 @@ class BrandRecommendationService:
             NoAvailableBoothsError: If the mall has no available booths
         """
         total_start = time.time()
+
+        # Check if mall has active commission contract before processing
+        if not self.mall_repository.has_active_commission_contract(mall_id):
+            api_logger.warning(f"Mall {mall_id} has no active commission contract")
+            raise NoActiveCommissionContractError(mall_id)
 
         # Check if mall has available booths before processing
         if not self.mall_repository.has_available_booths(mall_id):

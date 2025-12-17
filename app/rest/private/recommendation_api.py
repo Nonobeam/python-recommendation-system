@@ -5,7 +5,12 @@ from typing import List
 from fastapi import APIRouter, Body, Query
 from pydantic import BaseModel, Field
 
-from app.exception.recommendation_exceptions import DemographicsError, NoAvailableBoothsError, ScoreCalculationError
+from app.exception.recommendation_exceptions import (
+    DemographicsError,
+    NoActiveCommissionContractError,
+    NoAvailableBoothsError,
+    ScoreCalculationError,
+)
 from app.model.booth_recommendation_models import BoothRecommendationItem, BoothRecommendationResponse
 from app.model.brand_recommendation_models import BrandRecommendationItem, BrandRecommendationResponse
 from app.model.error_code import ErrorCode
@@ -431,6 +436,11 @@ async def get_recommended_brands(
 
     except NoAvailableBoothsError as e:
         api_logger.warning(f"No available booths error: {str(e)}")
+        error_code, message = map_exception_to_error_code(e)
+        return error(error_code, message)
+
+    except NoActiveCommissionContractError as e:
+        api_logger.warning(f"No active commission contract error: {str(e)}")
         error_code, message = map_exception_to_error_code(e)
         return error(error_code, message)
 
