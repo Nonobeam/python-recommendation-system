@@ -2,7 +2,12 @@ from app.exception.api_exceptions import APIError, AuthenticationError, NotFound
 from app.exception.cache_exceptions import RedisConnectionError, RedisOperationError
 from app.exception.custom_exceptions import ElasticsearchConnectionError, GeminiAPIError
 from app.exception.database_exceptions import DatabaseError, QueryExecutionError
-from app.exception.recommendation_exceptions import DemographicsError, NoAvailableBoothsError, ScoreCalculationError
+from app.exception.recommendation_exceptions import (
+    DemographicsError,
+    NoActiveCommissionContractError,
+    NoAvailableBoothsError,
+    ScoreCalculationError,
+)
 from app.model.error_code import ErrorCode
 
 
@@ -28,6 +33,8 @@ def map_exception_to_error_code(exception: Exception) -> tuple[ErrorCode, str]:
         return ErrorCode.SCORE_CALCULATION_ERROR, str(exception)
     elif isinstance(exception, NoAvailableBoothsError):
         return ErrorCode.NO_AVAILABLE_BOOTHS, str(exception)
+    elif isinstance(exception, NoActiveCommissionContractError):
+        return ErrorCode.NO_ACTIVE_COMMISSION_CONTRACT, str(exception)
     elif isinstance(exception, GeminiAPIError):
         return ErrorCode.GEMINI_API_ERROR, str(exception)
     elif isinstance(exception, ElasticsearchConnectionError):

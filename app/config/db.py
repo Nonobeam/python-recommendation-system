@@ -37,6 +37,12 @@ if DB_SCHEMA:
 else:
     DATABASE_URL = base_url
 
+# Log connection string with masked password
+masked_url = f"postgresql+psycopg2://{DB_USERNAME}:****@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+if DB_SCHEMA:
+    masked_url += f"?options=-c%20search_path%3D{DB_SCHEMA}"
+print(f"[DB] Connecting to: {masked_url}")
+
 engine = create_engine(
     DATABASE_URL,
     echo=False,

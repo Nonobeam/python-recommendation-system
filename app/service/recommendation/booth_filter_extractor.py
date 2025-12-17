@@ -2,8 +2,8 @@ from typing import Any, Dict, Optional
 
 from app.config.elasticsearch import AISearchService
 from app.constants import STARTUP_CHEAP_BOOTH_PRICE_THRESHOLD
+from app.datastore.repositories import BrandDemographicDataSource
 from app.model.search_history import get_brand_search_history
-from app.service.recommendation.repositories import BrandDemographicDataSource
 from app.utils.logger import api_logger
 
 
