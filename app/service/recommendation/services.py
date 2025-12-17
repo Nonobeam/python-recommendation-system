@@ -12,8 +12,8 @@ class SingleMatchService(RecommendationService):
     def calculate_match_score(self, brand_id: str, mall_id: str) -> Dict[str, Any]:
         from datetime import datetime
 
+        from app.datastore.repositories import BrandDemographicDataSource, MallDemographicDataSource
         from app.exception.recommendation_exceptions import ScoreCalculationError
-        from app.service.recommendation.repositories import BrandDemographicDataSource, MallDemographicDataSource
 
         brand_data = BrandDemographicDataSource.get_by_id(brand_id)
         mall_data = MallDemographicDataSource.get_by_id(mall_id)
@@ -37,7 +37,7 @@ class BatchMatchService(RecommendationService):
     def calculate_batch_scores(self, brand_id: str, mall_ids: List[str]) -> List[Dict[str, Any]]:
         from datetime import datetime
 
-        from app.service.recommendation.repositories import BrandDemographicDataSource, MallDemographicDataSource
+        from app.datastore.repositories import BrandDemographicDataSource, MallDemographicDataSource
 
         brand_data = BrandDemographicDataSource.get_by_id(brand_id)
         if not brand_data:
