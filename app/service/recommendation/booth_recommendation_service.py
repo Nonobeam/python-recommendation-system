@@ -182,6 +182,7 @@ class BoothRecommendationService:
 
         booths = self.booth_repository.get_available_booths_with_category_and_price(
             mall_ids=top_mall_ids,
+            brand_id=brand_id,
             preferred_floors=preferred_floors,
         )
 
