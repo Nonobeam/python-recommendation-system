@@ -131,6 +131,30 @@ class AISearchService:
             - contact_email (string): Contact email
             - website (string): Website URL
 
+            Available booth fields:
+            - booth_name (string): Booth name
+            - floor_name (string): Floor name
+            - floor_description (string): Floor description
+            - zone_description (string): Zone description
+            - category_name (string): Category name (e.g., "Dịch vụ - Làm đẹp & Spa")
+            - booth_description (string): Booth description
+            - shape (string): Booth shape (e.g., "Hình vuông", "Hình chữ nhật")
+            - size_m2 (number): Booth size in square meters
+            - ceiling_height_m (number): Ceiling height in meters
+            - frontage_width_m (number): Frontage width in meters
+            - storage_area_m2 (number): Storage area in square meters
+            - electricity_capacity_kw (number): Electricity capacity in kilowatts
+            - has_windows (boolean): Has windows
+            - has_column_obstacles (boolean): Has column obstacles
+            - has_water_supply (boolean): Has water supply
+            - has_gas_line (boolean): Has gas line
+            - has_drainage (boolean): Has drainage
+            - has_ventilation (boolean): Has ventilation
+            - has_grease_trap (boolean): Has grease trap
+            - has_internet (boolean): Has internet
+            - has_storage_area (boolean): Has storage area
+            - rent_price (number): Booth rental price
+
             Return ONLY a JSON object with extracted criteria. Always include a "general_search"
             field that contains the normalized search text you want Elasticsearch to use (not the
             original raw query), and add any structured fields you can extract. Always keep
@@ -219,6 +243,7 @@ class AISearchService:
     def _validate_criteria(self, criteria: Dict[str, Any]) -> Dict[str, Any]:
         """Validate and sanitize extracted criteria"""
         valid_fields = {
+            # Mall fields
             "mall_name",
             "mall_type",
             "avg_daily_visitors",
@@ -244,6 +269,30 @@ class AISearchService:
             "contact_phone",
             "contact_email",
             "website",
+            # Booth fields
+            "booth_name",
+            "floor_name",
+            "floor_description",
+            "zone_description",
+            "category_name",
+            "booth_description",
+            "shape",
+            "size_m2",
+            "ceiling_height_m",
+            "frontage_width_m",
+            "storage_area_m2",
+            "electricity_capacity_kw",
+            "has_windows",
+            "has_column_obstacles",
+            "has_water_supply",
+            "has_gas_line",
+            "has_drainage",
+            "has_ventilation",
+            "has_grease_trap",
+            "has_internet",
+            "has_storage_area",
+            "rent_price",
+            # Location fields
             "street",
             "district",
             "ward",
@@ -261,8 +310,25 @@ class AISearchService:
 
     def _sanitize_value(self, field: str, value: Any) -> Any:
         """Sanitize individual field values"""
-        boolean_fields = {"has_public_transport_access", "has_loading_dock", "has_elevator", "has_escalator"}
+        boolean_fields = {
+            # Mall boolean fields
+            "has_public_transport_access",
+            "has_loading_dock",
+            "has_elevator",
+            "has_escalator",
+            # Booth boolean fields
+            "has_windows",
+            "has_column_obstacles",
+            "has_water_supply",
+            "has_gas_line",
+            "has_drainage",
+            "has_ventilation",
+            "has_grease_trap",
+            "has_internet",
+            "has_storage_area",
+        }
         numeric_fields = {
+            # Mall numeric fields
             "avg_daily_visitors",
             "management_fee_usd",
             "motorbike_fee_vnd",
@@ -272,6 +338,13 @@ class AISearchService:
             "opening_year",
             "parking_motorbike_spaces",
             "parking_car_spaces",
+            # Booth numeric fields
+            "size_m2",
+            "ceiling_height_m",
+            "frontage_width_m",
+            "storage_area_m2",
+            "electricity_capacity_kw",
+            "rent_price",
         }
 
         if field in boolean_fields:
@@ -687,6 +760,7 @@ class ElasticsearchService:
             "has_storage_area",
             "storage_area_m2",
             "booth_description",
+            "rent_price",
             "updated_at",
         ]
 
