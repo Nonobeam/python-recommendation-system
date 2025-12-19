@@ -49,7 +49,6 @@ class BoothRepository:
         brand_id: str,
         min_size: Optional[float] = None,
         max_size: Optional[float] = None,
-        preferred_floors: Optional[List[int]] = None,
         size_tolerance: float = 0.2,
     ) -> List[Dict[str, Any]]:
         db: Session = next(get_db())
@@ -71,8 +70,25 @@ class BoothRepository:
                     m.address as mall_address,
                     f.level as floor_level,
                     z.categories_id as zone_categories_id,
-                    bi.frontage_width_m as frontage_width_m,
-                    asset.file_url as booth_image
+                    bi.frontage_width_m,
+                    bi.shape,
+                    bi.ceiling_height_m,
+                    bi.has_windows,
+                    bi.has_column_obstacles,
+                    bi.has_electricity,
+                    bi.electricity_capacity_kw,
+                    bi.has_water_supply,
+                    bi.has_gas_line,
+                    bi.has_drainage,
+                    bi.has_ventilation,
+                    bi.has_grease_trap,
+                    bi.has_internet,
+                    bi.has_storage_area,
+                    bi.storage_area_m2,
+                    bi.zone_description,
+                    bi.description as booth_description,
+                    asset.file_url as booth_image,
+                    CASE WHEN wl.booth_id IS NOT NULL THEN TRUE ELSE FALSE END as is_on_waitlist
                 FROM booth b
                 INNER JOIN booth_rental_price brp ON b.booth_id = brp.booth_id AND brp.is_current = true
                 LEFT JOIN zone z ON b.zone_id = z.zone_id
@@ -86,6 +102,7 @@ class BoothRepository:
                     ORDER BY bva.display_order ASC NULLS LAST
                     LIMIT 1
                 ) asset ON TRUE
+                LEFT JOIN brand_mall_waitlist wl ON b.booth_id = wl.booth_id AND wl.brand_id = :brand_id
                 WHERE b.is_available = true
                     AND b.status = 'ACTIVE'
                     AND b.mall_id IN ({placeholders})
@@ -121,12 +138,6 @@ class BoothRepository:
                 query_parts.append("AND b.size_m2 <= :max_size")
                 params["max_size"] = float(max_size_with_tolerance)
 
-            if preferred_floors is not None and len(preferred_floors) > 0:
-                floor_placeholders = ",".join([f":floor_{i}" for i in range(len(preferred_floors))])
-                query_parts.append(f"AND f.level IN ({floor_placeholders})")
-                for i, floor in enumerate(preferred_floors):
-                    params[f"floor_{i}"] = floor
-
             query = text(" ".join(query_parts))
 
             log_access_message(
@@ -157,6 +168,26 @@ class BoothRepository:
                     "zone_categories_id": row.zone_categories_id,
                     "frontage_width_m": float(row.frontage_width_m) if row.frontage_width_m else None,
                     "booth_image": row.booth_image,
+                    "is_on_waitlist": row.is_on_waitlist if row.is_on_waitlist else False,
+                    # Booth information fields for scoring
+                    "shape": row.shape,
+                    "ceiling_height_m": float(row.ceiling_height_m) if row.ceiling_height_m else None,
+                    "has_windows": row.has_windows,
+                    "has_column_obstacles": row.has_column_obstacles,
+                    "has_electricity": row.has_electricity,
+                    "electricity_capacity_kw": (
+                        float(row.electricity_capacity_kw) if row.electricity_capacity_kw else None
+                    ),
+                    "has_water_supply": row.has_water_supply,
+                    "has_gas_line": row.has_gas_line,
+                    "has_drainage": row.has_drainage,
+                    "has_ventilation": row.has_ventilation,
+                    "has_grease_trap": row.has_grease_trap,
+                    "has_internet": row.has_internet,
+                    "has_storage_area": row.has_storage_area,
+                    "storage_area_m2": float(row.storage_area_m2) if row.storage_area_m2 else None,
+                    "zone_description": row.zone_description,
+                    "description": row.booth_description,
                 }
                 booths.append(booth)
 

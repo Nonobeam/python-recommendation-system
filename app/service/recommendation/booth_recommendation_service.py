@@ -157,10 +157,11 @@ class BoothRecommendationService:
                 message=f"Brand demographics not found for brand_id={brand_id}",
             )
 
+        # 1. Get Brand demographic and category
         brand_meta = brand_data.get("meta_data", brand_data)
-
         brand_category_id = self.booth_repository.get_brand_category_id(brand_id)
 
+        # 2. Scoring mall
         all_mall_ids = self._get_all_mall_ids()
         if not all_mall_ids:
             api_logger.warning("No malls found in database")
@@ -178,23 +179,15 @@ class BoothRecommendationService:
 
         mall_scores_dict = {mall.get("mall_id"): mall.get("final_score", 0) for mall in top_malls}
 
-        preferred_floors = filters.get("preferred_floors")
-
         booths = self.booth_repository.get_available_booths_with_category_and_price(
-            mall_ids=top_mall_ids,
-            brand_id=brand_id,
-            preferred_floors=preferred_floors,
+            mall_ids=top_mall_ids, brand_id=brand_id
         )
 
         if not booths:
             api_logger.warning(f"No available booths found for brand_id={brand_id} with filters")
             return []
 
-        booth_ids = [booth.get("booth_id") for booth in booths if booth.get("booth_id")]
-        waitlist_status = self._check_waitlist_status(brand_id, booth_ids)
-        rental_status = self._check_rental_status(booth_ids)
-
-        # Filter out booths that exceed price affordability
+        # 3. Filter out booths that exceed price affordability
         affordable_booths = []
         for booth in booths:
             booth_price = booth.get("rent_price")
@@ -212,13 +205,7 @@ class BoothRecommendationService:
             mall_score = mall_scores_dict.get(mall_id, 0)
 
             try:
-                booth_for_scoring = booth.copy()
-                if booth_id:
-                    details = self.booth_repository.get_booth_with_details(booth_id)
-                    if details:
-                        booth_for_scoring.update(details)
-
-                scorer = BoothScorer(brand_meta, booth_for_scoring, mall_score)
+                scorer = BoothScorer(brand_meta, booth, mall_score)
                 result = scorer.compute_final_score()
 
                 zone_category_id = booth.get("zone_categories_id")
@@ -227,18 +214,17 @@ class BoothRecommendationService:
                 is_current = booth.get("price_is_current", False)
 
                 processed_booth = {
-                    "booth_id": booth.get("booth_id"),
-                    "booth_name": booth.get("booth_name") or booth_for_scoring.get("name"),
-                    "booth_size": booth.get("frontage_width_m") or booth_for_scoring.get("frontage_width_m"),
-                    "booth_price": booth.get("rent_price") or booth_for_scoring.get("rent_price"),
-                    "booth_image": booth.get("booth_image") or booth_for_scoring.get("booth_image"),
-                    "floor_level": booth.get("floor_level") or booth_for_scoring.get("floor_level"),
+                    "booth_id": booth_id,
+                    "booth_name": booth.get("booth_name"),
+                    "booth_size": booth.get("frontage_width_m"),
+                    "booth_price": booth.get("rent_price"),
+                    "booth_image": booth.get("booth_image"),
+                    "floor_level": booth.get("floor_level"),
                     "mall_id": mall_id,
                     "mall_name": booth.get("mall_name"),
-                    "mall_logo": booth.get("mall_logo") or booth_for_scoring.get("mall_logo"),
-                    "mall_address": booth.get("mall_address") or booth_for_scoring.get("mall_address"),
-                    "is_on_waitlist": waitlist_status.get(booth_id, False),
-                    "is_rented": rental_status.get(booth_id, False),
+                    "mall_logo": booth.get("mall_logo"),
+                    "mall_address": booth.get("mall_address"),
+                    "is_on_waitlist": booth.get("is_on_waitlist", False),
                     "_category_match": category_match,
                     "_is_current": is_current,
                     "_composite_score": result.get("composite_score", 0),
