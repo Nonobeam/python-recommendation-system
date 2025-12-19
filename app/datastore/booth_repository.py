@@ -46,6 +46,7 @@ class BoothRepository:
     def get_available_booths_with_category_and_price(
         self,
         mall_ids: List[str],
+        brand_id: str,
         min_size: Optional[float] = None,
         max_size: Optional[float] = None,
         preferred_floors: Optional[List[int]] = None,
@@ -63,8 +64,8 @@ class BoothRepository:
                     b.size_m2,
                     b.zone_id,
                     b.floor_id,
-                    current_price.rent_price,
-                    COALESCE(current_price.is_current, false) as price_is_current,
+                    brp.rent_price,
+                    brp.is_current as price_is_current,
                     m.name as mall_name,
                     m.logo as mall_logo,
                     m.address as mall_address,
@@ -73,17 +74,11 @@ class BoothRepository:
                     bi.frontage_width_m as frontage_width_m,
                     asset.file_url as booth_image
                 FROM booth b
-                LEFT JOIN LATERAL (
-                    SELECT brp.rent_price, brp.is_current
-                    FROM booth_rental_price brp
-                    WHERE brp.booth_id = b.booth_id
-                    ORDER BY brp.is_current DESC NULLS LAST, brp.effective_from DESC NULLS LAST
-                    LIMIT 1
-                ) current_price ON TRUE
+                INNER JOIN booth_rental_price brp ON b.booth_id = brp.booth_id AND brp.is_current = true
                 LEFT JOIN zone z ON b.zone_id = z.zone_id
                 LEFT JOIN floor f ON b.floor_id = f.floor_id
                 LEFT JOIN booth_information bi ON b.booth_id = bi.booth_id
-                LEFT JOIN mall m ON b.mall_id = m.mall_id
+                INNER JOIN mall m ON b.mall_id = m.mall_id AND m.status = 'ACTIVE'
                 LEFT JOIN LATERAL (
                     SELECT bva.file_url
                     FROM booth_visual_assets bva
@@ -92,12 +87,25 @@ class BoothRepository:
                     LIMIT 1
                 ) asset ON TRUE
                 WHERE b.is_available = true
+                    AND b.status = 'ACTIVE'
                     AND b.mall_id IN ({placeholders})
-                    AND m.status = 'ACTIVE'
+                    AND NOT EXISTS (
+                        SELECT 1 FROM rental_information ri
+                        WHERE ri.booth_id = b.booth_id
+                        AND ri.brand_id = :brand_id
+                        AND ri.status = 'ACTIVE'
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1 FROM booth_rental_request brr
+                        WHERE brr.booth_id = b.booth_id
+                        AND brr.brand_id = :brand_id
+                        AND brr.status = 'ACTIVE'
+                    )
             """
             ]
 
             params: Dict[str, Any] = {f"mall_id_{i}": mall_id for i, mall_id in enumerate(mall_ids)}
+            params["brand_id"] = brand_id
 
             if min_size is not None:
                 min_size_decimal = Decimal(str(min_size))
