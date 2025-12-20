@@ -153,7 +153,20 @@ class AISearchService:
             - has_grease_trap (boolean): Has grease trap
             - has_internet (boolean): Has internet
             - has_storage_area (boolean): Has storage area
-            - rent_price (number): Booth rental price
+            - rent_price (number): Booth rental price in VND
+
+            IMPORTANT - VIETNAMESE PRICE UNDERSTANDING:
+            In Vietnam, people commonly use "triệu" to mean million VND.
+            When users mention prices with "triệu", convert them to the full number in VND:
+            - "4 triệu" → rent_price: 4000000 (or range if context implies approximate)
+            - "dưới 5 triệu" or "< 5 triệu" → rent_price: {"lte": 5000000}
+            - "trên 3 triệu" or "> 3 triệu" → rent_price: {"gte": 3000000}
+            - "từ 2 đến 5 triệu" or "2-5 triệu" → rent_price: {"gte": 2000000, "lte": 5000000}
+            - "khoảng 4 triệu" or "tầm 4 triệu" → rent_price: {"gte": 3500000, "lte": 4500000}
+            Examples:
+            - Query: "booth giá 4 triệu" → {"general_search": "booth", "rent_price": 4000000}
+            - Query: "tìm booth dưới 10 triệu" → {"general_search": "booth", "rent_price": {"lte": 10000000}}
+            - Query: "booth 5-8 triệu quận 1" → {"general_search": "booth", "rent_price": {"gte": 5000000, "lte": 8000000}, "district": "quận 1"}
 
             Return ONLY a JSON object with extracted criteria. Always include a "general_search"
             field that contains the normalized search text you want Elasticsearch to use (not the
