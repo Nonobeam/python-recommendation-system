@@ -109,7 +109,6 @@ class BoothRepository:
                     AND NOT EXISTS (
                         SELECT 1 FROM rental_information ri
                         WHERE ri.booth_id = b.booth_id
-                        AND ri.brand_id = :brand_id
                         AND ri.status = 'ACTIVE'
                     )
                     AND NOT EXISTS (
