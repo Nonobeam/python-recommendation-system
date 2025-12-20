@@ -162,7 +162,7 @@ class AISearchService:
             - "dưới 5 triệu" or "< 5 triệu" → rent_price: {"lte": 5000000}
             - "trên 3 triệu" or "> 3 triệu" → rent_price: {"gte": 3000000}
             - "từ 2 đến 5 triệu" or "2-5 triệu" → rent_price: {"gte": 2000000, "lte": 5000000}
-            - "khoảng 4 triệu" or "tầm 4 triệu" → rent_price: {"gte": 3500000, "lte": 4500000}
+            - "khoảng 4 triệu" or "tầm 4 triệu" → rent_price: {"gte": 3000000, "lte": 5000000}
             Examples:
             - Query: "booth giá 4 triệu" → {"general_search": "booth", "rent_price": 4000000}
             - Query: "tìm booth dưới 10 triệu" → {"general_search": "booth", "rent_price": {"lte": 10000000}}
@@ -564,10 +564,11 @@ class ElasticsearchService:
 
             query_parts = []
 
-            if "general_search" in criteria:
+            structured_parts = self._build_structured_booth_query(criteria)
+            query_parts.extend(structured_parts)
+
+            if "general_search" in criteria and criteria["general_search"]:
                 query_parts.append(self._build_general_booth_search_query(criteria["general_search"]))
-            else:
-                query_parts = self._build_structured_booth_query(criteria)
 
             if not query_parts:
                 search_body = {"query": {"match_all": {}}, "from": from_offset, "size": size}
