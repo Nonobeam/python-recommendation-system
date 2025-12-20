@@ -156,17 +156,22 @@ class AISearchService:
             - rent_price (number): Booth rental price in VND
 
             IMPORTANT - VIETNAMESE PRICE UNDERSTANDING:
-            In Vietnam, people commonly use "triệu" to mean million VND.
-            When users mention prices with "triệu", convert them to the full number in VND:
-            - "4 triệu" → rent_price: 4000000 (or range if context implies approximate)
+            In Vietnam, people commonly use "triệu" to mean million VND. "Giá" means price.
+            When users mention prices with "triệu", you MUST extract the rent_price field.
+            CRITICAL: Do NOT include price-related words (giá, triệu, numbers for price) in general_search.
+            Convert to the full number in VND:
+            - "4 triệu" → rent_price: 4000000
+            - "giá 4 triệu" or "Giá 4 triệu" → rent_price: 4000000 (NOT in general_search!)
             - "dưới 5 triệu" or "< 5 triệu" → rent_price: {"lte": 5000000}
             - "trên 3 triệu" or "> 3 triệu" → rent_price: {"gte": 3000000}
             - "từ 2 đến 5 triệu" or "2-5 triệu" → rent_price: {"gte": 2000000, "lte": 5000000}
-            - "khoảng 4 triệu" or "tầm 4 triệu" → rent_price: {"gte": 3000000, "lte": 5000000}
+            - "khoảng X triệu" or "tầm X triệu" → means ±1 million, so rent_price: {"gte": (X-1)*1000000, "lte": (X+1)*1000000}
             Examples:
+            - Query: "Giá khoảng 42 triệu" → {"rent_price": {"gte": 41000000, "lte": 43000000}} (NO general_search needed!)
             - Query: "booth giá 4 triệu" → {"general_search": "booth", "rent_price": 4000000}
             - Query: "tìm booth dưới 10 triệu" → {"general_search": "booth", "rent_price": {"lte": 10000000}}
             - Query: "booth 5-8 triệu quận 1" → {"general_search": "booth", "rent_price": {"gte": 5000000, "lte": 8000000}, "district": "quận 1"}
+            - Query: "khoảng 20 triệu" → {"rent_price": {"gte": 19000000, "lte": 21000000}}
 
             Return ONLY a JSON object with extracted criteria. Always include a "general_search"
             field that contains the normalized search text you want Elasticsearch to use (not the
@@ -481,6 +486,7 @@ class ElasticsearchService:
                 return {"success": False, "error": f"AI extraction failed: {extraction_result['error']}", "results": []}
 
             criteria = extraction_result["criteria"]
+            elasticsearch_logger.info(f"AI extracted criteria for query '{query}': {criteria}")
 
             search_result = self.search_booths_with_ai_criteria(criteria, page, size)
             total_found = search_result.get("total", 0)
