@@ -38,7 +38,8 @@ class BrandRepository:
 
     def get_simple_brand_info_limited(self, limit: int, exclude_for_mall_id: str = None) -> Dict[str, Dict[str, Any]]:
         """
-        Get brand_id, name, and logo for `limit` active brands in ONE query.
+        Get brand_id, name, logo, phone_number, mail, short_description, and category_name
+        for `limit` active brands in ONE query.
         Returns dict keyed by brand_id for easy lookup.
 
         Args:
@@ -51,8 +52,11 @@ class BrandRepository:
         try:
             query = text(
                 """
-                SELECT b.brand_id, b.name AS brand_name, b.logo AS brand_logo
+                SELECT b.brand_id, b.name AS brand_name, b.logo AS brand_logo,
+                       b.phone_number, b.mail, b.short_description,
+                       c.name AS category_name
                 FROM brand b
+                LEFT JOIN categories c ON b.categories_id = c.categories_id
                 WHERE b.status = 'ACTIVE'
                 AND NOT EXISTS (
                     SELECT 1
@@ -85,6 +89,10 @@ class BrandRepository:
                     "brand_id": row.brand_id,
                     "brand_name": row.brand_name,
                     "brand_logo": row.brand_logo,
+                    "phone_number": row.phone_number,
+                    "mail": row.mail,
+                    "short_description": row.short_description,
+                    "category_name": row.category_name,
                 }
             return brands
         except Exception as e:

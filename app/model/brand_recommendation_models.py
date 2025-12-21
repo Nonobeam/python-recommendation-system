@@ -7,6 +7,10 @@ class BrandRecommendationItem(BaseModel):
     brand_id: str = Field(..., description="Brand identifier")
     brand_name: Optional[str] = Field(None, description="Brand name")
     brand_logo: Optional[str] = Field(None, description="Brand logo URL")
+    phone_number: Optional[str] = Field(None, description="Brand contact phone number")
+    mail: Optional[str] = Field(None, description="Brand email address")
+    category_name: Optional[str] = Field(None, description="Brand category name")
+    short_description: Optional[str] = Field(None, description="Brand short description")
     final_score: int = Field(..., description="Final compatibility score (rounded down)")
 
 
