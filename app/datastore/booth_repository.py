@@ -117,6 +117,13 @@ class BoothRepository:
                         AND brr.brand_id = :brand_id
                         AND brr.status = 'ACTIVE'
                     )
+                    AND NOT EXISTS (
+                        SELECT 1 FROM rental_information ri
+                        JOIN booth rented_booth ON ri.booth_id = rented_booth.booth_id
+                        WHERE rented_booth.mall_id = b.mall_id
+                        AND ri.brand_id = :brand_id
+                        AND ri.status = 'ACTIVE'
+                    )
             """
             ]
 
