@@ -117,6 +117,10 @@ class BrandRecommendationService:
                     "final_score": rounded_final_score,
                     "brand_name": brand_info.get("brand_name"),
                     "brand_logo": brand_info.get("brand_logo"),
+                    "phone_number": brand_info.get("phone_number"),
+                    "mail": brand_info.get("mail"),
+                    "category_name": brand_info.get("category_name"),
+                    "short_description": brand_info.get("short_description"),
                 }
                 scored_brands.append(scored_brand)
 
