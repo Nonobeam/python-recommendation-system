@@ -162,11 +162,12 @@ class AISearchService:
             Convert to the full number in VND:
             - "4 triệu" → rent_price: 4000000
             - "giá 4 triệu" or "Giá 4 triệu" → rent_price: 4000000 (NOT in general_search!)
-            - "dưới 5 triệu" or "< 5 triệu" → rent_price: {"lte": 5000000}
-            - "trên 3 triệu" or "> 3 triệu" → rent_price: {"gte": 3000000}
+            - "dưới 5 triệu" or "< 5 triệu" or "Giá < X triệu" → rent_price: {"lte": 5000000} (returns ALL prices from 0 to 5 million!)
+            - "trên 3 triệu" or "> 3 triệu" → rent_price: {"gte": 3000000} (returns ALL prices from 3 million upwards!)
             - "từ 2 đến 5 triệu" or "2-5 triệu" → rent_price: {"gte": 2000000, "lte": 5000000}
-            - "Giá từ X-Y triệu" or "Giá từ X đến Y triệu" → rent_price: {"gte": X*1000000, "lte": Y*1000000}
+            - "Giá từ X-Y triệu" or "Giá từ X đến Y triệu" or "Giá X - Y triệu" → rent_price: {"gte": X*1000000, "lte": Y*1000000}
             - "khoảng X triệu" or "tầm X triệu" → means ±1 million, so rent_price: {"gte": (X-1)*1000000, "lte": (X+1)*1000000}
+            CRITICAL: Use {"lte": value} or {"gte": value} for comparisons - these return ALL matching values in the range, NOT exact matches!
             - Query: "Giá khoảng 42 triệu" → {"rent_price": {"gte": 41000000, "lte": 43000000}} (NO general_search needed!)
             - Query: "booth giá 4 triệu" → {"general_search": "booth", "rent_price": 4000000}
             - Query: "tìm booth dưới 10 triệu" → {"general_search": "booth", "rent_price": {"lte": 10000000}}
@@ -174,7 +175,7 @@ class AISearchService:
             - Query: "khoảng 20 triệu" → {"rent_price": {"gte": 19000000, "lte": 21000000}}
             - Query: "Giá từ 5-10 triệu" → {"rent_price": {"gte": 5000000, "lte": 10000000}} (NO general_search needed!)
             - Query: "Giá từ 3 đến 7 triệu" → {"rent_price": {"gte": 3000000, "lte": 7000000}}
-            - Query: "Giá < 5 triệu" → {"rent_price": {"lte": 5000000}} (NO general_search needed!)
+            - Query: "Giá < 5 triệu" → {"rent_price": {"lte": 5000000}} (returns ALL prices from 0 to 5 million!)
             - Query: "Giá 5 - 10 triệu" → {"rent_price": {"gte": 5000000, "lte": 10000000}} (spaces around dash OK!)
 
             IMPORTANT - VIETNAMESE SIZE/AREA UNDERSTANDING:
