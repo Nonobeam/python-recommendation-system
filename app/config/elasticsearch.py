@@ -165,6 +165,7 @@ class AISearchService:
             - "dưới 5 triệu" or "< 5 triệu" → rent_price: {"lte": 5000000}
             - "trên 3 triệu" or "> 3 triệu" → rent_price: {"gte": 3000000}
             - "từ 2 đến 5 triệu" or "2-5 triệu" → rent_price: {"gte": 2000000, "lte": 5000000}
+            - "Giá từ X-Y triệu" or "Giá từ X đến Y triệu" → rent_price: {"gte": X*1000000, "lte": Y*1000000}
             - "khoảng X triệu" or "tầm X triệu" → means ±1 million, so rent_price: {"gte": (X-1)*1000000, "lte": (X+1)*1000000}
             Examples:
             - Query: "Giá khoảng 42 triệu" → {"rent_price": {"gte": 41000000, "lte": 43000000}} (NO general_search needed!)
@@ -172,6 +173,8 @@ class AISearchService:
             - Query: "tìm booth dưới 10 triệu" → {"general_search": "booth", "rent_price": {"lte": 10000000}}
             - Query: "booth 5-8 triệu quận 1" → {"general_search": "booth", "rent_price": {"gte": 5000000, "lte": 8000000}, "district": "quận 1"}
             - Query: "khoảng 20 triệu" → {"rent_price": {"gte": 19000000, "lte": 21000000}}
+            - Query: "Giá từ 5-10 triệu" → {"rent_price": {"gte": 5000000, "lte": 10000000}} (NO general_search needed!)
+            - Query: "Giá từ 3 đến 7 triệu" → {"rent_price": {"gte": 3000000, "lte": 7000000}}
 
             Return ONLY a JSON object with extracted criteria. Always include a "general_search"
             field that contains the normalized search text you want Elasticsearch to use (not the
