@@ -167,7 +167,6 @@ class AISearchService:
             - "từ 2 đến 5 triệu" or "2-5 triệu" → rent_price: {"gte": 2000000, "lte": 5000000}
             - "Giá từ X-Y triệu" or "Giá từ X đến Y triệu" → rent_price: {"gte": X*1000000, "lte": Y*1000000}
             - "khoảng X triệu" or "tầm X triệu" → means ±1 million, so rent_price: {"gte": (X-1)*1000000, "lte": (X+1)*1000000}
-            Examples:
             - Query: "Giá khoảng 42 triệu" → {"rent_price": {"gte": 41000000, "lte": 43000000}} (NO general_search needed!)
             - Query: "booth giá 4 triệu" → {"general_search": "booth", "rent_price": 4000000}
             - Query: "tìm booth dưới 10 triệu" → {"general_search": "booth", "rent_price": {"lte": 10000000}}
@@ -175,6 +174,28 @@ class AISearchService:
             - Query: "khoảng 20 triệu" → {"rent_price": {"gte": 19000000, "lte": 21000000}}
             - Query: "Giá từ 5-10 triệu" → {"rent_price": {"gte": 5000000, "lte": 10000000}} (NO general_search needed!)
             - Query: "Giá từ 3 đến 7 triệu" → {"rent_price": {"gte": 3000000, "lte": 7000000}}
+            - Query: "Giá < 5 triệu" → {"rent_price": {"lte": 5000000}} (NO general_search needed!)
+            - Query: "Giá 5 - 10 triệu" → {"rent_price": {"gte": 5000000, "lte": 10000000}} (spaces around dash OK!)
+
+            IMPORTANT - VIETNAMESE SIZE/AREA UNDERSTANDING:
+            When users mention "diện tích" (area) or "m2" (square meters), extract size_m2 field.
+            - "Diện tích 10 m2" or "10m2" → size_m2: 10
+            - "Diện tích trên 20 m2" → size_m2: {"gte": 20}
+            - "Diện tích dưới 15 m2" → size_m2: {"lte": 15}
+            - "Diện tích từ 10 đến 30 m2" → size_m2: {"gte": 10, "lte": 30}
+            Examples:
+            - Query: "Diện tích 10 m2" → {"size_m2": 10}
+            - Query: "booth diện tích 20m2" → {"general_search": "booth", "size_m2": 20}
+
+            IMPORTANT - VIETNAMESE FLOOR/HEIGHT UNDERSTANDING:
+            When users mention "tầng" (floor) with comparison keywords, extract number_of_floors field.
+            - "Cao trên X tầng" or "trên X tầng" → number_of_floors: {"gte": X+1} (above X means X+1 or more)
+            - "Cao hơn X tầng" → number_of_floors: {"gt": X}
+            - "Dưới X tầng" → number_of_floors: {"lte": X}
+            - "X tầng" (exact) → number_of_floors: X
+            Examples:
+            - Query: "Cao trên 2 tầng" → {"number_of_floors": {"gte": 3}}
+            - Query: "mall 3 tầng trở lên" → {"general_search": "mall", "number_of_floors": {"gte": 3}}
 
             Return ONLY a JSON object with extracted criteria. Always include a "general_search"
             field that contains the normalized search text you want Elasticsearch to use (not the
