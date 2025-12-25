@@ -81,9 +81,6 @@ class BrandRepository:
                     WHERE ri.brand_id = b.brand_id
                         AND booth.mall_id = :mall_id
                         AND ri.status = 'ACTIVE'
-                        AND ri.contract_status != 'TERMINATED'
-                        AND ri.starting_date <= CURRENT_DATE
-                        AND ri.ending_date >= CURRENT_DATE
                 )
                 LIMIT :limit;
                 """
