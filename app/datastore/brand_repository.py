@@ -36,7 +36,7 @@ class BrandRepository:
         finally:
             db.close()
 
-    def get_simple_brand_info_limited(self, limit: int, exclude_for_mall_id: str = None) -> Dict[str, Dict[str, Any]]:
+    def get_simple_brand_info_limited(self, limit: int, exclude_for_mall_id: str) -> Dict[str, Dict[str, Any]]:
         """
         Get brand_id, name, logo, phone_number, mail, short_description, and category_name
         for `limit` active brands in ONE query.
@@ -44,10 +44,16 @@ class BrandRepository:
 
         Args:
             limit: Maximum number of brands to return
-            exclude_for_mall_id: If provided, excludes brands that have:
+            exclude_for_mall_id: Required. Excludes brands that have:
                 - Active rental request for a booth in this mall
                 - Active rental information for a booth in this mall
+
+        Raises:
+            ValueError: If exclude_for_mall_id is not provided
         """
+        if not exclude_for_mall_id:
+            raise ValueError("exclude_for_mall_id is required")
+
         db: Session = next(get_db())
         try:
             query = text(
@@ -75,8 +81,9 @@ class BrandRepository:
                     WHERE ri.brand_id = b.brand_id
                         AND booth.mall_id = :mall_id
                         AND ri.status = 'ACTIVE'
-                        AND ri.contract_status IS DISTINCT FROM 'TERMINATED'
-                        AND CURRENT_DATE BETWEEN ri.starting_date AND ri.ending_date
+                        AND ri.contract_status != 'TERMINATED'
+                        AND ri.starting_date <= CURRENT_DATE
+                        AND ri.ending_date >= CURRENT_DATE
                 )
                 LIMIT :limit;
                 """
