@@ -216,7 +216,7 @@ class BoothRecommendationService:
                 processed_booth = {
                     "booth_id": booth_id,
                     "booth_name": booth.get("booth_name"),
-                    "booth_size": booth.get("frontage_width_m"),
+                    "booth_size": booth.get("size_m2"),
                     "booth_price": booth.get("rent_price"),
                     "booth_image": booth.get("booth_image"),
                     "floor_level": booth.get("floor_level"),
